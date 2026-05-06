@@ -191,6 +191,7 @@ struct ProfileDetailView: View {
 
     @State private var pendingInstructions = ""
     @State private var instructionsDirty   = false
+    @State private var drafts:             [String: String] = [:]
     @State private var newVocabWord        = ""
     @FocusState private var vocabFocused: Bool
 
@@ -212,10 +213,15 @@ struct ProfileDetailView: View {
             }
             .padding(24)
         }
-        .onAppear   { pendingInstructions = profile.customInstructions }
-        .onChange(of: profile.id) { _, _ in
-            pendingInstructions = profile.customInstructions
-            instructionsDirty   = false
+        .onAppear { pendingInstructions = drafts[profile.id] ?? profile.customInstructions
+                    instructionsDirty   = drafts[profile.id].map { $0 != profile.customInstructions } ?? false }
+        .onChange(of: profile.id) { oldID, _ in
+            // Preserve unsaved edit for the profile we're leaving
+            if instructionsDirty { drafts[oldID] = pendingInstructions }
+            // Restore draft (if any) for the newly selected profile
+            let draft           = drafts[profile.id]
+            pendingInstructions = draft ?? profile.customInstructions
+            instructionsDirty   = draft.map { $0 != profile.customInstructions } ?? false
         }
     }
 
@@ -345,6 +351,7 @@ struct ProfileDetailView: View {
                     Spacer()
                     Button("Revert") {
                         pendingInstructions = profile.customInstructions
+                        drafts.removeValue(forKey: profile.id)
                         instructionsDirty   = false
                     }
                     .buttonStyle(.bordered)
@@ -352,6 +359,7 @@ struct ProfileDetailView: View {
 
                     Button("Save") {
                         profile.customInstructions = pendingInstructions
+                        drafts.removeValue(forKey: profile.id)
                         instructionsDirty          = false
                     }
                     .buttonStyle(.borderedProminent)
@@ -443,14 +451,20 @@ struct VocabChip: View {
 struct FlowLayout: Layout {
     var spacing: CGFloat = 8
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let width = proposal.width ?? .infinity
-        var x: CGFloat = 0, y: CGFloat = 0, rowH: CGFloat = 0
+        let maxWidth = proposal.width ?? .infinity
+        var x: CGFloat = 0, y: CGFloat = 0, rowH: CGFloat = 0, curRowWidth: CGFloat = 0, maxRowWidth: CGFloat = 0
         for v in subviews {
             let s = v.sizeThatFits(.unspecified)
-            if x + s.width > width, x > 0 { x = 0; y += rowH + spacing; rowH = 0 }
-            rowH = max(rowH, s.height); x += s.width + spacing
+            if x + s.width > maxWidth, x > 0 {
+                maxRowWidth = max(maxRowWidth, curRowWidth - spacing)
+                x = 0; y += rowH + spacing; rowH = 0; curRowWidth = 0
+            }
+            rowH = max(rowH, s.height)
+            x += s.width + spacing
+            curRowWidth += s.width + spacing
         }
-        return CGSize(width: width, height: y + rowH)
+        maxRowWidth = max(maxRowWidth, curRowWidth - spacing)
+        return CGSize(width: proposal.width ?? maxRowWidth, height: y + rowH)
     }
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         var x = bounds.minX, y = bounds.minY, rowH: CGFloat = 0

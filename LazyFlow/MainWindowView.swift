@@ -188,19 +188,29 @@ struct HistoryView: View {
     private var grouped: [(key: String, entries: [TranscriptEntry])] {
         let cal = Calendar.current
         let groups = Dictionary(grouping: filtered) { entry -> String in
-            if cal.isDateInToday(entry.date)     { return "Today" }
-            if cal.isDateInYesterday(entry.date)  { return "Yesterday" }
+            if cal.isDateInToday(entry.date)    { return "Today" }
+            if cal.isDateInYesterday(entry.date) { return "Yesterday" }
             let days = cal.dateComponents([.day], from: entry.date, to: Date()).day ?? 0
-            if days < 7                           { return "This Week" }
+            if days < 7                          { return "This Week" }
             return entry.date.formatted(.dateTime.month(.wide).year())
         }
-        let order = ["Today", "Yesterday", "This Week"]
-        let sorted = groups.keys.sorted { a, b in
-            let ai = order.firstIndex(of: a) ?? 99
-            let bi = order.firstIndex(of: b) ?? 99
-            return ai == bi ? a > b : ai < bi
+        let pinnedOrder = ["Today", "Yesterday", "This Week"]
+        // Representative date per section: most-recent entry in that section.
+        // Pinned labels always sort before month/year buckets via their index.
+        return groups.keys.sorted { a, b in
+            let ai = pinnedOrder.firstIndex(of: a)
+            let bi = pinnedOrder.firstIndex(of: b)
+            switch (ai, bi) {
+            case let (ai?, bi?): return ai < bi          // both pinned: preserve fixed order
+            case (.some, nil):   return true              // a is pinned, b is not
+            case (nil, .some):   return false             // b is pinned, a is not
+            case (nil, nil):                              // both are month/year: sort by most-recent entry date
+                let da = groups[a]!.map(\.date).max() ?? .distantPast
+                let db = groups[b]!.map(\.date).max() ?? .distantPast
+                return da > db
+            }
         }
-        return sorted.map { key in (key: key, entries: groups[key]!) }
+        .map { key in (key: key, entries: groups[key]!) }
     }
 
     var body: some View {
@@ -253,9 +263,9 @@ struct HistoryView: View {
                     }
                 }
                 .listStyle(.inset)
-                .searchable(text: $searchText, prompt: "Search transcripts")
             }
         }
+        .searchable(text: $searchText, prompt: "Search transcripts")
     }
 }
 

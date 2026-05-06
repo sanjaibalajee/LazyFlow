@@ -42,7 +42,7 @@ struct PostProcessingService {
 #endif
 
         let endpoint = URL(string: "\(baseURL)/chat/completions")!
-        var request  = URLRequest(url: endpoint)
+        var request  = URLRequest(url: endpoint, timeoutInterval: 30)
         request.httpMethod = "POST"
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json",  forHTTPHeaderField: "Content-Type")
