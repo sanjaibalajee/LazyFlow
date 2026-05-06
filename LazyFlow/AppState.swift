@@ -37,6 +37,10 @@ final class AppState {
 
     var onRecordingChanged: ((Bool) -> Void)?
 
+    // MARK: - Profiles
+
+    let profileStore = AppProfileStore()
+
     // MARK: - Private state
 
     private let audioCapture = AudioCapture()
@@ -78,8 +82,18 @@ final class AppState {
         onRecordingChanged?(false)
 
         let audioURL  = audioCapture.outputURL
-        let service   = TranscriptionService(apiKey: apiKey)
+        let stt       = TranscriptionService(apiKey: apiKey)
+        let llm       = PostProcessingService(apiKey: apiKey)
         let targetApp = recordingTargetApp
+        // Only create a profile for apps with a real bundle ID — nil-bundle apps
+        // (e.g. some system processes) are excluded so they don't share a junk profile.
+        let profile: AppProfile? = targetApp.flatMap { app in
+            guard let bundleID = app.bundleIdentifier else { return nil }
+            return profileStore.profileOrDefault(
+                for: bundleID,
+                displayName: app.localizedName ?? bundleID
+            )
+        }
 
         let startedAt = Date()
 
@@ -87,15 +101,28 @@ final class AppState {
             defer { audioCapture.cleanup() }
             guard let url = audioURL else { recordingMode = .idle; return }
             do {
-                let transcript = try await service.transcribe(audioURL: url)
+                let raw = try await stt.transcribe(audioURL: url)
+
+                // Post-processing is best-effort — STT result is never lost if LLM fails
+                var final = raw
+                if let p = profile {
+                    do {
+                        final = try await llm.process(rawTranscript: raw, profile: p)
+                    } catch {
+                        print("[LazyFlow] ⚠️ Cleanup failed, pasting raw transcript: \(error.localizedDescription)")
+                        errorMessage = "Cleanup unavailable — raw transcript pasted."
+                    }
+                }
+
                 let elapsed = Date().timeIntervalSince(startedAt)
-                print("[LazyFlow] ✅ \(String(format: "%.2fs", elapsed)) | \(targetApp?.localizedName ?? "unknown app") | \"\(transcript)\"")
-                finishProcessing(transcript: transcript,
+                let tone    = profile?.tone.displayName ?? "none"
+                print("[LazyFlow] ✅ \(String(format: "%.2fs", elapsed)) | \(targetApp?.localizedName ?? "?") [\(tone)]")
+                finishProcessing(transcript: final,
                                  appName: targetApp?.localizedName,
                                  bundleIdentifier: targetApp?.bundleIdentifier)
-                pasteAtCursor(transcript, targetApp: targetApp)
+                pasteAtCursor(final, targetApp: targetApp)
             } catch {
-                print("[LazyFlow] ❌ Transcription failed: \(error.localizedDescription)")
+                print("[LazyFlow] ❌ \(error.localizedDescription)")
                 errorMessage  = error.localizedDescription
                 recordingMode = .idle
             }
