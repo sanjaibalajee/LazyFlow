@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		9F0D8BE92FAB89BD00A1AEAB /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 9F0D8BE82FAB89BD00A1AEAB /* Sparkle */; };
+		9F0D8C652FAC761900A1AEAB /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 9F0D8C642FAC761900A1AEAB /* GRDB */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -41,6 +42,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				9F0D8BE92FAB89BD00A1AEAB /* Sparkle in Frameworks */,
+				9F0D8C652FAC761900A1AEAB /* GRDB in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -84,6 +86,7 @@
 			name = LazyFlow;
 			packageProductDependencies = (
 				9F0D8BE82FAB89BD00A1AEAB /* Sparkle */,
+				9F0D8C642FAC761900A1AEAB /* GRDB */,
 			);
 			productName = LazyFlow;
 			productReference = 9F0D8BD72FAB86A500A1AEAB /* LazyFlow.app */;
@@ -117,6 +120,7 @@
 				9F0D8BE52FAB88B200A1AEAB /* XCRemoteSwiftPackageReference "WhisperKit" */,
 				9F0D8BE62FAB896400A1AEAB /* XCRemoteSwiftPackageReference "mlx-swift" */,
 				9F0D8BE72FAB89BD00A1AEAB /* XCRemoteSwiftPackageReference "Sparkle" */,
+				9F0D8C632FAC761900A1AEAB /* XCRemoteSwiftPackageReference "GRDB" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 9F0D8BD82FAB86A500A1AEAB /* Products */;
@@ -203,7 +207,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -261,7 +265,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = macosx;
@@ -278,9 +282,9 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = Q78J7L8TLR;
-				ENABLE_APP_SANDBOX = YES;
+				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
@@ -322,9 +326,9 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = Q78J7L8TLR;
-				ENABLE_APP_SANDBOX = YES;
+				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
@@ -405,6 +409,14 @@
 				minimumVersion = 2.9.1;
 			};
 		};
+		9F0D8C632FAC761900A1AEAB /* XCRemoteSwiftPackageReference "GRDB" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/groue/GRDB.swift";
+			requirement = {
+				branch = master;
+				kind = branch;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -412,6 +424,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 9F0D8BE72FAB89BD00A1AEAB /* XCRemoteSwiftPackageReference "Sparkle" */;
 			productName = Sparkle;
+		};
+		9F0D8C642FAC761900A1AEAB /* GRDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9F0D8C632FAC761900A1AEAB /* XCRemoteSwiftPackageReference "GRDB" */;
+			productName = GRDB;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

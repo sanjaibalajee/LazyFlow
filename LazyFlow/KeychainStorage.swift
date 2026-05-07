@@ -13,7 +13,10 @@ enum Keychain {
             kSecValueData:    data
         ]
         SecItemDelete(query as CFDictionary)
-        SecItemAdd(query as CFDictionary, nil)
+        let status = SecItemAdd(query as CFDictionary, nil)
+        if status != errSecSuccess {
+            print("[LazyFlow] Keychain save failed for key '\(key)': OSStatus \(status)")
+        }
     }
 
     static func load(forKey key: String) -> String? {

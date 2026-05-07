@@ -44,14 +44,20 @@ final class AppProfileStore {
     // MARK: - Persistence
 
     private func save() {
-        guard let data = try? JSONEncoder().encode(profiles) else { return }
-        UserDefaults.standard.set(data, forKey: storageKey)
+        do {
+            let data = try JSONEncoder().encode(profiles)
+            UserDefaults.standard.set(data, forKey: storageKey)
+        } catch {
+            print("[LazyFlow] AppProfileStore.save failed: \(error)")
+        }
     }
 
     private func load() {
-        guard let data    = UserDefaults.standard.data(forKey: storageKey),
-              let decoded = try? JSONDecoder().decode([String: AppProfile].self, from: data)
-        else { return }
-        profiles = decoded
+        guard let data = UserDefaults.standard.data(forKey: storageKey) else { return }
+        do {
+            profiles = try JSONDecoder().decode([String: AppProfile].self, from: data)
+        } catch {
+            print("[LazyFlow] AppProfileStore.load failed (schema changed?): \(error)")
+        }
     }
 }

@@ -32,8 +32,9 @@ final class AudioCapture {
         rec.isMeteringEnabled = true
         guard rec.record() else { throw AudioCaptureError.noInputAvailable }
 
-        recorder  = rec
-        outputURL = url
+        recorder          = rec
+        outputURL         = url
+        recordingStartedAt = Date()
 
         levelTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
             guard let rec = self?.recorder else { return }
@@ -44,9 +45,14 @@ final class AudioCapture {
         }
     }
 
+    // Duration in seconds of the completed recording
+    private(set) var recordingDuration: TimeInterval = 0
+    private var recordingStartedAt: Date?
+
     func stop() {
         levelTimer?.invalidate()
         levelTimer = nil
+        recordingDuration = recordingStartedAt.map { Date().timeIntervalSince($0) } ?? 0
         recorder?.stop()
         recorder = nil
     }
