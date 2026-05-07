@@ -158,28 +158,31 @@ struct ProfileSidebarRow: View {
 }
 
 // MARK: - App Icon
+// Cached like AppBundleIcon — NSWorkspace filesystem lookups must not run on every render.
 
 struct AppIconView: View {
     let bundleIdentifier: String
-
-    private var icon: NSImage {
-        // Running app gives the most direct icon access
-        if let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier).first,
-           let icon = running.icon {
-            return icon
-        }
-        // Fall back to installed-app file lookup
-        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier) {
-            return NSWorkspace.shared.icon(forFile: url.path)
-        }
-        return NSImage(systemSymbolName: "app.dashed", accessibilityDescription: nil) ?? NSImage()
-    }
+    @State private var cachedIcon: NSImage?
 
     var body: some View {
-        Image(nsImage: icon)
+        Image(nsImage: cachedIcon ?? placeholder)
             .resizable()
             .aspectRatio(contentMode: .fit)
             .clipShape(RoundedRectangle(cornerRadius: 5))
+            .task(id: bundleIdentifier) { cachedIcon = resolveIcon() }
+    }
+
+    private func resolveIcon() -> NSImage {
+        if let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier).first,
+           let icon = running.icon { return icon }
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier) {
+            return NSWorkspace.shared.icon(forFile: url.path)
+        }
+        return placeholder
+    }
+
+    private var placeholder: NSImage {
+        NSImage(systemSymbolName: "app.dashed", accessibilityDescription: nil) ?? NSImage()
     }
 }
 
@@ -189,10 +192,14 @@ struct ProfileDetailView: View {
     @Binding var profile: AppProfile
     let onDelete: () -> Void
 
+    @Environment(AppState.self) private var appState
+
     @State private var pendingInstructions = ""
     @State private var instructionsDirty   = false
     @State private var drafts:             [String: String] = [:]
     @State private var newVocabWord        = ""
+    @State private var newHeardWord        = ""   // "heard" side for correction pair
+    @State private var newCorrectWord      = ""   // "correct" side for correction pair
     @FocusState private var vocabFocused: Bool
 
     var body: some View {
@@ -286,16 +293,27 @@ struct ProfileDetailView: View {
             Text("Each option adds a specific instruction on top of the tone.")
                 .font(.caption).foregroundStyle(.secondary)
 
+            if profile.tone == .code || profile.tone == .technical {
+                Text("Lowercase and filler-word options are not compatible with \(profile.tone.displayName) tone.")
+                    .font(.caption2).foregroundStyle(.orange)
+            }
+            if profile.tone == .formal {
+                Text("Keep filler words is not compatible with Formal tone.")
+                    .font(.caption2).foregroundStyle(.orange)
+            }
+
             VStack(spacing: 0) {
                 FormattingToggleRow("Preserve line breaks",  "Keep paragraph structure",         isOn: $profile.formattingOptions.preserveLineBreaks)
                 Divider().padding(.leading, 12)
                 FormattingToggleRow("Bulletize",             "Convert items to a bulleted list",  isOn: $profile.formattingOptions.bulletize)
                 Divider().padding(.leading, 12)
                 FormattingToggleRow("Lowercase",             "Output everything in lowercase",    isOn: $profile.formattingOptions.lowercase)
+                    .disabled(profile.tone == .code || profile.tone == .technical)
                 Divider().padding(.leading, 12)
                 FormattingToggleRow("Stronger punctuation",  "Add commas, em-dashes, semicolons", isOn: $profile.formattingOptions.strongerPunctuation)
                 Divider().padding(.leading, 12)
                 FormattingToggleRow("Keep filler words",     "Preserve um, uh, like, you know",   isOn: $profile.formattingOptions.keepFillerWords)
+                    .disabled(profile.tone == .formal || profile.tone == .code || profile.tone == .technical)
             }
             .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
         }
@@ -304,26 +322,80 @@ struct ProfileDetailView: View {
     // MARK: Vocabulary
 
     private var vocabularySection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             Label("Vocabulary", systemImage: "character.book.closed")
                 .font(.headline)
-            Text("Terms preserved exactly as written — names, jargon, brand names.")
-                .font(.caption).foregroundStyle(.secondary)
 
-            HStack {
-                TextField("Add term…", text: $newVocabWord)
-                    .textFieldStyle(.roundedBorder)
-                    .focused($vocabFocused)
-                    .onSubmit { addWord() }
-                Button("Add", action: addWord)
-                    .disabled(newVocabWord.trimmingCharacters(in: .whitespaces).isEmpty)
+            // Protected terms (existing)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Protected terms — preserved exactly as written")
+                    .font(.caption).foregroundStyle(.secondary)
+                HStack {
+                    TextField("Add term…", text: $newVocabWord)
+                        .textFieldStyle(.roundedBorder)
+                        .focused($vocabFocused)
+                        .onSubmit { addWord() }
+                    Button("Add", action: addWord)
+                        .disabled(newVocabWord.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                if !profile.vocabulary.isEmpty {
+                    FlowLayout(spacing: 6) {
+                        ForEach(profile.vocabulary, id: \.self) { word in
+                            VocabChip(word: word) { profile.vocabulary.removeAll { $0 == word } }
+                        }
+                    }
+                }
             }
 
-            if !profile.vocabulary.isEmpty {
-                FlowLayout(spacing: 6) {
-                    ForEach(profile.vocabulary, id: \.self) { word in
-                        VocabChip(word: word) { profile.vocabulary.removeAll { $0 == word } }
+            Divider()
+
+            // Correction pairs (new)
+            let appCorrections = appState.correctionStore.corrections(for: profile.bundleIdentifier)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Correction pairs — what Whisper hears → what it should be")
+                    .font(.caption).foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    TextField("Heard…", text: $newHeardWord)
+                        .textFieldStyle(.roundedBorder)
+                    Image(systemName: "arrow.right")
+                        .foregroundStyle(.tertiary)
+                    TextField("Correct…", text: $newCorrectWord)
+                        .textFieldStyle(.roundedBorder)
+                    Button("Add") { addCorrectionPair() }
+                        .disabled(newHeardWord.trimmingCharacters(in: .whitespaces).isEmpty
+                                  || newCorrectWord.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                if !appCorrections.isEmpty {
+                    VStack(spacing: 0) {
+                        ForEach(appCorrections) { pair in
+                            HStack(spacing: 6) {
+                                Text("\"\(pair.heard)\"")
+                                    .font(.system(.caption, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                                Image(systemName: "arrow.right")
+                                    .font(.caption2).foregroundStyle(.tertiary)
+                                Text("\"\(pair.correct)\"")
+                                    .font(.system(.caption, design: .monospaced))
+                                Spacer()
+                                if pair.frequency > 0 {
+                                    Text("\(pair.frequency)×")
+                                        .font(.caption2).foregroundStyle(.tertiary)
+                                }
+                                Button {
+                                    appState.correctionStore.delete(pair.id)
+                                } label: {
+                                    Image(systemName: "xmark").font(.caption2)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            if pair.id != appCorrections.last?.id {
+                                Divider().padding(.leading, 10)
+                            }
+                        }
                     }
+                    .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 7))
                 }
             }
         }
@@ -374,6 +446,17 @@ struct ProfileDetailView: View {
         guard !w.isEmpty, !profile.vocabulary.contains(w) else { return }
         profile.vocabulary.append(w)
         newVocabWord = ""
+    }
+
+    private func addCorrectionPair() {
+        let heard   = newHeardWord.trimmingCharacters(in: .whitespaces)
+        let correct = newCorrectWord.trimmingCharacters(in: .whitespaces)
+        guard !heard.isEmpty, !correct.isEmpty else { return }
+        let entry = CorrectionEntry(heard: heard, correct: correct,
+                                    bundleIdentifier: profile.bundleIdentifier)
+        appState.correctionStore.add(entry)
+        newHeardWord  = ""
+        newCorrectWord = ""
     }
 }
 

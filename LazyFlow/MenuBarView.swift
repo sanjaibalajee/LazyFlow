@@ -1,8 +1,9 @@
 import SwiftUI
 
 struct MenuBarView: View {
-    @Environment(AppState.self) private var appState
-    @Environment(\.openWindow) private var openWindow
+    @Environment(AppState.self)    private var appState
+    @Environment(\.openWindow)     private var openWindow
+    @Environment(\.openSettings)   private var openSettings
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -55,7 +56,7 @@ struct MenuBarView: View {
                 NSApp.activate(ignoringOtherApps: true)
             }
             MenuBarActionRow(label: "Settings", icon: "gear") {
-                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                openSettings()
                 NSApp.activate(ignoringOtherApps: true)
             }
             MenuBarActionRow(label: "Quit LazyFlow", icon: "power", isDestructive: true) {
@@ -142,8 +143,10 @@ struct RecordButton: View {
 
 struct MenuBarTranscriptRow: View {
     let entry: TranscriptEntry
-    @State private var isHovered = false
-    @State private var copied    = false
+    @Environment(AppState.self) private var appState
+    @State private var isHovered      = false
+    @State private var copied         = false
+    @State private var showCorrection = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -170,6 +173,18 @@ struct MenuBarTranscriptRow: View {
 
             Spacer(minLength: 4)
 
+            // Correct button
+            Button { showCorrection = true } label: {
+                Image(systemName: "pencil")
+                    .font(.caption)
+                    .foregroundStyle(Color.secondary)
+                    .frame(width: 20, height: 20)
+                    .opacity(isHovered ? 1 : 0.35)
+            }
+            .buttonStyle(.plain)
+            .help("Correct this transcript")
+
+            // Copy button
             Button {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(entry.text, forType: .string)
@@ -180,7 +195,7 @@ struct MenuBarTranscriptRow: View {
                     .font(.caption)
                     .foregroundStyle(copied ? Color.green : Color.secondary)
                     .frame(width: 20, height: 20)
-                    .opacity(isHovered || copied ? 1 : 0)
+                    .opacity(isHovered || copied ? 1 : 0.35)
             }
             .buttonStyle(.plain)
             .help("Copy to clipboard")
@@ -193,6 +208,11 @@ struct MenuBarTranscriptRow: View {
         )
         .padding(.horizontal, 4)
         .onHover { isHovered = $0 }
+        .sheet(isPresented: $showCorrection) {
+            CorrectionSheet(entry: entry,
+                            correctionStore: appState.correctionStore,
+                            transcriptStore: appState.transcriptStore)
+        }
     }
 }
 

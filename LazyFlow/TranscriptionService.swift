@@ -25,24 +25,32 @@ struct TranscriptionService {
         self.model = model
     }
 
-    func transcribe(audioURL: URL) async throws -> String {
+    // vocabularyHint: comma-separated terms passed as Whisper's `prompt` field to bias
+    // transcription toward correct spellings of names, jargon, and proper nouns.
+    func transcribe(audioURL: URL, vocabularyHint: String = "") async throws -> String {
         guard !apiKey.isEmpty else { throw TranscriptionError.missingAPIKey }
 
         let endpoint = URL(string: "\(baseURL)/audio/transcriptions")!
-        var request = URLRequest(url: endpoint)
+        var request = URLRequest(url: endpoint, timeoutInterval: 60)
         request.httpMethod = "POST"
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
 
         let boundary = UUID().uuidString
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try buildBody(audioURL: audioURL, boundary: boundary)
+        request.httpBody = try buildBody(audioURL: audioURL, boundary: boundary, vocabularyHint: vocabularyHint)
 
         let (data, response) = try await URLSession.shared.data(for: request)
-        let rawBody = String(data: data, encoding: .utf8) ?? "<non-utf8>"
-        print("[LazyFlow] 📡 HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1): \(rawBody)")
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+#if DEBUG
+        print("[LazyFlow] 📡 HTTP \(statusCode)")
+#endif
 
         if let http = response as? HTTPURLResponse, http.statusCode != 200 {
-            throw TranscriptionError.httpError(http.statusCode, rawBody)
+            let rawBody = String(data: data, encoding: .utf8) ?? "unknown"
+#if DEBUG
+            print("[LazyFlow] 📡 STT error body: \(rawBody)")
+#endif
+            throw TranscriptionError.httpError(http.statusCode, "Transcription service returned \(http.statusCode) — check your API key or try again.")
         }
 
         struct Response: Decodable { let text: String }
@@ -52,7 +60,7 @@ struct TranscriptionService {
         return decoded.text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func buildBody(audioURL: URL, boundary: String) throws -> Data {
+    private func buildBody(audioURL: URL, boundary: String, vocabularyHint: String) throws -> Data {
         var body = Data()
         let audioData = try Data(contentsOf: audioURL)
         let crlf = "\r\n"
@@ -70,6 +78,13 @@ struct TranscriptionService {
         append("--\(boundary)\(crlf)")
         append("Content-Disposition: form-data; name=\"response_format\"\(crlf)\(crlf)")
         append("json\(crlf)")
+
+        // prompt field — biases Whisper toward correct spellings of names and terms
+        if !vocabularyHint.isEmpty {
+            append("--\(boundary)\(crlf)")
+            append("Content-Disposition: form-data; name=\"prompt\"\(crlf)\(crlf)")
+            append("\(vocabularyHint)\(crlf)")
+        }
 
         // audio file
         append("--\(boundary)\(crlf)")

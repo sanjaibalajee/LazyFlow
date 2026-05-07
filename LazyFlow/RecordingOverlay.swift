@@ -4,12 +4,17 @@ import AppKit
 // MARK: - Controller
 
 final class RecordingOverlayController {
+    private let appState: AppState
     private var panel: NSPanel?
 
-    func show(audioLevel: Float = 0) {
+    init(appState: AppState) {
+        self.appState = appState
+    }
+
+    func show() {
         if panel != nil { return }
 
-        let hosting = NSHostingView(rootView: RecordingOverlayView())
+        let hosting = NSHostingView(rootView: RecordingOverlayView().environment(appState))
         hosting.frame = NSRect(x: 0, y: 0, width: 180, height: 52)
 
         let p = NSPanel(
@@ -57,15 +62,17 @@ final class RecordingOverlayController {
 // MARK: - View
 
 struct RecordingOverlayView: View {
-    @State private var pulse = false
+    @Environment(AppState.self) private var appState
 
     var body: some View {
         HStack(spacing: 10) {
             ZStack {
+                // Outer ring scales with live microphone level
                 Circle()
-                    .fill(Color.red.opacity(0.3))
+                    .fill(Color.red.opacity(0.25))
                     .frame(width: 22, height: 22)
-                    .scaleEffect(pulse ? 1.4 : 1.0)
+                    .scaleEffect(1.0 + CGFloat(appState.audioLevel) * 0.55)
+                    .animation(.easeOut(duration: 0.08), value: appState.audioLevel)
 
                 Circle()
                     .fill(Color.red)
@@ -79,10 +86,5 @@ struct RecordingOverlayView: View {
         .padding(.horizontal, 18)
         .padding(.vertical, 12)
         .background(.regularMaterial, in: Capsule())
-        .onAppear {
-            withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) {
-                pulse = true
-            }
-        }
     }
 }

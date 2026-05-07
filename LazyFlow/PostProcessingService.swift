@@ -2,11 +2,9 @@ import Foundation
 
 enum PostProcessingError: LocalizedError {
     case httpError(Int, String)
-    case truncated               // model hit token limit — response may be partial
     var errorDescription: String? {
         switch self {
         case .httpError(let c, let m): return "Post-processing failed (\(c)): \(m)"
-        case .truncated:               return "Cleanup response was truncated — raw transcript used."
         }
     }
 }
@@ -18,25 +16,33 @@ struct PostProcessingService {
 
     init(apiKey: String,
          baseURL: String = "https://api.groq.com/openai/v1",
-         model: String   = "llama-3.1-8b-instant") {
+         model: String   = "openai/gpt-oss-20b") {
         self.apiKey  = apiKey
         self.baseURL = baseURL
         self.model   = model
     }
 
-    func process(rawTranscript: String, profile: AppProfile) async throws -> String {
-        guard let systemPrompt = profile.resolvedSystemPrompt, !apiKey.isEmpty else {
+    func process(rawTranscript: String,
+                 profile: AppProfile,
+                 corrections: [CorrectionEntry] = []) async throws -> String {
+        guard let (setup, style) = profile.resolvedPromptComponents, !apiKey.isEmpty else {
             return rawTranscript
         }
 
-        let userMessage = "<transcript>\n\(rawTranscript)\n</transcript>"
+        // Corrections are injected between setup (hard rules + vocabulary) and style (tone +
+        // formatting). This ensures they are applied before formatting rules, not as an afterthought.
+        var systemPrompt = setup
+        if !corrections.isEmpty {
+            let pairs = corrections
+                .map { "- \"\($0.heard)\" → \"\($0.correct)\"" }
+                .joined(separator: "\n")
+            systemPrompt += "\n\nSpeech correction pairs (correct these speech recognition errors before applying formatting):\n\(pairs)"
+        }
+        systemPrompt += "\n\n" + style
 
-        // Word count * ~1.5 token/word, doubled for headroom, floored at 256
-        let estimatedTokens = max(256, rawTranscript.split(separator: " ").count * 3)
+        let userMessage = "Input:\n\n\(rawTranscript)"
 
-        // Metadata-only log in all builds. Full prompt/transcript dump requires
-        // -DLAZYFLOW_VERBOSE set in Other Swift Flags (never enable in production).
-        print("[LazyFlow] 🤖 \(profile.displayName) [\(profile.tone.displayName)] ~\(estimatedTokens) tokens → \(model)")
+        print("[LazyFlow] 🤖 \(profile.displayName) [\(profile.tone.displayName)] → \(model)")
 #if LAZYFLOW_VERBOSE
         print("[LazyFlow] ── system prompt ──\n\(systemPrompt)\n── user message ──\n\(userMessage)")
 #endif
@@ -53,7 +59,6 @@ struct PostProcessingService {
                 ["role": "system", "content": systemPrompt],
                 ["role": "user",   "content": userMessage]
             ],
-            "max_tokens":  estimatedTokens,
             "temperature": 0.0
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -68,7 +73,10 @@ struct PostProcessingService {
 
         if statusCode != 200 {
             let msg = String(data: data, encoding: .utf8) ?? "unknown"
-            throw PostProcessingError.httpError(statusCode, msg)
+#if DEBUG
+            print("[LazyFlow] 🤖 Post-processing error body: \(msg)")
+#endif
+            throw PostProcessingError.httpError(statusCode, "Provider returned \(statusCode) — check your API key or try again.")
         }
 
         struct Msg:      Decodable { let content: String }
@@ -77,12 +85,6 @@ struct PostProcessingService {
 
         let decoded = try JSONDecoder().decode(Response.self, from: data)
         let choice  = decoded.choices.first
-
-        // If the model was cut off by the token limit, fall back to raw to avoid partial output
-        if choice?.finish_reason == "length" {
-            print("[LazyFlow] ⚠️ Cleanup truncated (hit token limit) — falling back to raw transcript")
-            throw PostProcessingError.truncated
-        }
 
         let result = choice?.message.content
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? rawTranscript

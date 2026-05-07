@@ -6,14 +6,26 @@ enum Keychain {
 
     static func save(_ value: String, forKey key: String) {
         let data = Data(value.utf8)
+        // Lookup query — no value, just the key identity
         let query: [CFString: Any] = [
-            kSecClass:        kSecClassGenericPassword,
-            kSecAttrService:  service,
-            kSecAttrAccount:  key,
-            kSecValueData:    data
+            kSecClass:       kSecClassGenericPassword,
+            kSecAttrService: service,
+            kSecAttrAccount: key
         ]
-        SecItemDelete(query as CFDictionary)
-        SecItemAdd(query as CFDictionary, nil)
+        // Prefer update over delete+add: if update fails because the item doesn't exist yet,
+        // fall back to add. This prevents credential loss if SecItemAdd were to fail.
+        let updateStatus = SecItemUpdate(query as CFDictionary,
+                                         [kSecValueData: data] as CFDictionary)
+        if updateStatus == errSecItemNotFound {
+            var addQuery = query
+            addQuery[kSecValueData] = data
+            let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+            if addStatus != errSecSuccess {
+                print("[LazyFlow] Keychain add failed for key '\(key)': OSStatus \(addStatus)")
+            }
+        } else if updateStatus != errSecSuccess {
+            print("[LazyFlow] Keychain update failed for key '\(key)': OSStatus \(updateStatus)")
+        }
     }
 
     static func load(forKey key: String) -> String? {

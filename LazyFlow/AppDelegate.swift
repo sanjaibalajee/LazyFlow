@@ -2,9 +2,9 @@ import AppKit
 import AVFoundation
 
 class AppDelegate: NSObject, NSApplicationDelegate {
-    let appState    = AppState()
+    let appState          = AppState()
     private let hotkeyManager = HotkeyManager()
-    private let overlay       = RecordingOverlayController()
+    private lazy var overlay  = RecordingOverlayController(appState: appState)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         requestMicrophonePermission()
@@ -40,7 +40,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func observeRecordingState() {
         appState.onRecordingChanged = { [weak self] recording in
             DispatchQueue.main.async {
-                recording ? self?.overlay.show() : self?.overlay.hide()
+                if recording { self?.overlay.show() } else { self?.overlay.hide() }
             }
         }
     }

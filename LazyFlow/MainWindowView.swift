@@ -276,7 +276,11 @@ struct KnowledgeBaseView: View {
         ContentUnavailableView(
             "Knowledge Base",
             systemImage: "brain",
-            description: Text("Personal info for smart form filling — coming in Phase 4.")
+            description: Text(
+                "Store personal facts — your name, address, job title, preferred phrases — " +
+                "so LazyFlow can fill forms and draft text using your real information " +
+                "instead of placeholders. Coming in a future update."
+            )
         )
     }
 }
@@ -284,12 +288,13 @@ struct KnowledgeBaseView: View {
 // MARK: - Transcript Row (shared)
 
 struct TranscriptRow: View {
-    let entry: TranscriptEntry
-    @State private var copied = false
+    let entry:           TranscriptEntry
+    @Environment(AppState.self) private var appState
+    @State private var copied         = false
+    @State private var showCorrection = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            // App icon
             AppBundleIcon(bundleIdentifier: entry.bundleIdentifier)
                 .frame(width: 28, height: 28)
                 .padding(.top, 1)
@@ -317,6 +322,17 @@ struct TranscriptRow: View {
 
             Spacer()
 
+            // Correct button
+            Button { showCorrection = true } label: {
+                Image(systemName: "pencil")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 20)
+            }
+            .buttonStyle(.plain)
+            .help("Correct this transcript")
+
+            // Copy button
             Button {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(entry.text, forType: .string)
@@ -332,22 +348,34 @@ struct TranscriptRow: View {
             .help("Copy to clipboard")
         }
         .padding(.vertical, 4)
+        .sheet(isPresented: $showCorrection) {
+            CorrectionSheet(entry: entry,
+                            correctionStore: appState.correctionStore,
+                            transcriptStore: appState.transcriptStore)
+        }
     }
 }
 
 // MARK: - App icon helper
+// Icon is resolved once on first appear and cached — NSWorkspace lookups hit the filesystem
+// and should not run on every SwiftUI render.
 
 struct AppBundleIcon: View {
     let bundleIdentifier: String?
+    @State private var cachedIcon: NSImage?
 
-    private var icon: NSImage {
+    var body: some View {
+        Image(nsImage: cachedIcon ?? placeholder)
+            .resizable()
+            .aspectRatio(contentMode: .fit)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .task(id: bundleIdentifier) { cachedIcon = resolveIcon() }
+    }
+
+    private func resolveIcon() -> NSImage {
         guard let id = bundleIdentifier else { return placeholder }
-        // Running app gives the most direct icon access
         if let running = NSRunningApplication.runningApplications(withBundleIdentifier: id).first,
-           let icon = running.icon {
-            return icon
-        }
-        // Fall back to installed-app file lookup
+           let icon = running.icon { return icon }
         if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) {
             return NSWorkspace.shared.icon(forFile: url.path)
         }
@@ -357,11 +385,94 @@ struct AppBundleIcon: View {
     private var placeholder: NSImage {
         NSImage(systemSymbolName: "app.dashed", accessibilityDescription: nil) ?? NSImage()
     }
+}
+
+// MARK: - Correction Sheet
+
+struct CorrectionSheet: View {
+    let entry:            TranscriptEntry
+    let correctionStore:  CorrectionStore
+    let transcriptStore:  TranscriptStore
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var corrected  = ""
+    @State private var shouldLearn = true
 
     var body: some View {
-        Image(nsImage: icon)
-            .resizable()
-            .aspectRatio(contentMode: .fit)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Correct Transcript")
+                .font(.headline)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Original")
+                    .font(.caption).foregroundStyle(.secondary)
+                Text(entry.text)
+                    .font(.system(.body, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .padding(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 6))
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Corrected")
+                    .font(.caption).foregroundStyle(.secondary)
+                TextEditor(text: $corrected)
+                    .font(.system(.body, design: .monospaced))
+                    .frame(minHeight: 80)
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(.separator))
+            }
+
+            Toggle(isOn: $shouldLearn) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Learn from this correction")
+                        .font(.body)
+                    Text("Saves only the changed word pairs from this correction (not the full sentence)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            HStack {
+                Spacer()
+                Button("Cancel") { dismiss() }
+                    .keyboardShortcut(.escape)
+                Button("Save & Learn") { save() }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(corrected.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                              || corrected == entry.text)
+            }
+        }
+        .padding(24)
+        .frame(width: 480)
+        .onAppear { corrected = entry.text }
+    }
+
+    private func save() {
+        let trimmed = corrected.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != entry.text else { dismiss(); return }
+
+        transcriptStore.update(entry.withText(trimmed))
+
+        if shouldLearn {
+            // Extract only the changed word regions — each becomes its own correction pair.
+            // "I asked that guy to confirm" → "I asked Pranav to confirm"
+            // stores: heard="that guy", correct="Pranav"  (not the full sentence)
+            let pairs = WordDiff.extract(original: entry.text, corrected: trimmed)
+
+            if pairs.isEmpty {
+                // No word changes detected — only punctuation/casing differs. Don't store a
+                // full-sentence correction pair; those never match future transcripts phonetically
+                // and would pollute the corrections dictionary.
+            } else {
+                for pair in pairs where !pair.heard.isEmpty && !pair.correct.isEmpty {
+                    correctionStore.add(CorrectionEntry(
+                        heard: pair.heard, correct: pair.correct,
+                        bundleIdentifier: entry.bundleIdentifier
+                    ))
+                }
+            }
+        }
+        dismiss()
     }
 }
