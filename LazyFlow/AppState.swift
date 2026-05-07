@@ -26,7 +26,7 @@ final class AppState {
     let transcriptStore  = TranscriptStore()
     let correctionStore  = CorrectionStore()
 
-    // MARK: - Settings  (API key stored in Keychain, not UserDefaults)
+    // MARK: - Settings  (API key stored in Keychain; model choices in UserDefaults)
 
     var apiKey: String = Keychain.load(forKey: "groq_api_key") ?? "" {
         didSet {
@@ -34,6 +34,14 @@ final class AppState {
                 ? Keychain.delete(forKey: "groq_api_key")
                 : Keychain.save(apiKey, forKey: "groq_api_key")
         }
+    }
+
+    var sttModel: String = UserDefaults.standard.string(forKey: "lazyflow_stt_model") ?? "whisper-large-v3" {
+        didSet { UserDefaults.standard.set(sttModel, forKey: "lazyflow_stt_model") }
+    }
+
+    var llmModel: String = UserDefaults.standard.string(forKey: "lazyflow_llm_model") ?? "llama-3.3-70b-versatile" {
+        didSet { UserDefaults.standard.set(llmModel, forKey: "lazyflow_llm_model") }
     }
 
     // MARK: - Callbacks (used by AppDelegate for non-SwiftUI observers)
@@ -106,8 +114,8 @@ final class AppState {
         onRecordingChanged?(false)
 
         let audioURL  = audioCapture.outputURL
-        let stt       = TranscriptionService(apiKey: apiKey)
-        let llm       = PostProcessingService(apiKey: apiKey)
+        let stt       = TranscriptionService(apiKey: apiKey, model: sttModel)
+        let llm       = PostProcessingService(apiKey: apiKey, model: llmModel)
         let targetApp = recordingTargetApp
         // Only create a profile for apps with a real bundle ID — nil-bundle apps
         // (e.g. some system processes) are excluded so they don't share a junk profile.
