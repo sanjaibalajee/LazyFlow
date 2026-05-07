@@ -144,8 +144,11 @@ struct SettingsView: View {
                         .font(.system(.body, design: .monospaced))
                         .onChange(of: customLLMText) { _, val in
                             let trimmed = val.trimmingCharacters(in: .whitespaces)
-                            guard !trimmed.isEmpty else { return }
-                            appState.llmModel = trimmed
+                            if trimmed.isEmpty {
+                                appState.llmModel = Self.llmPresets.first?.id ?? appState.llmModel
+                            } else {
+                                appState.llmModel = trimmed
+                            }
                         }
 
                     if !customLLMText.isEmpty {
