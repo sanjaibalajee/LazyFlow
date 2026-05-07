@@ -427,7 +427,7 @@ struct CorrectionSheet: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Learn from this correction")
                         .font(.body)
-                    Text("Adds \"\(entry.text)\" → \"\(corrected.isEmpty ? "…" : corrected)\" to your corrections dictionary")
+                    Text("Saves only the changed word pairs from this correction (not the full sentence)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

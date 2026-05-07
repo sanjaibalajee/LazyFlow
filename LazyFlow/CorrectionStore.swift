@@ -44,9 +44,11 @@ final class CorrectionStore {
                     .fetchOne(db)
 
                 if var existing {
-                    existing.correct   = entry.correct
-                    existing.frequency += 1
-                    existing.lastUsed  = Date()
+                    // Only update the correct spelling and timestamp — do NOT touch frequency.
+                    // frequency is exclusively managed by incrementFrequency(for:), which is
+                    // called when a correction is actually applied to a transcript.
+                    existing.correct  = entry.correct
+                    existing.lastUsed = Date()
                     try existing.update(db)
                 } else {
                     try entry.insert(db)

@@ -18,7 +18,19 @@ final class TranscriptStore {
 
     func insert(_ entry: TranscriptEntry) {
         do {
-            try db.write { db in try entry.insert(db) }
+            try db.write { db in
+                try entry.insert(db)
+                // Prune rows beyond the 200 most recent atomically in the same transaction
+                // so the DB doesn't grow unbounded while the in-memory array stays capped.
+                try db.execute(sql: """
+                    DELETE FROM transcripts
+                    WHERE id IN (
+                        SELECT id FROM transcripts
+                        ORDER BY date DESC
+                        LIMIT -1 OFFSET 200
+                    )
+                    """)
+            }
             entries.insert(entry, at: 0)
             if entries.count > 200 { entries = Array(entries.prefix(200)) }
         } catch {

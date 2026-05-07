@@ -57,15 +57,14 @@ the history view shows every transcript, grouped by date, searchable, filterable
 ## requirements
 
 - macos 14+
-- apple silicon or intel
+- Apple Silicon or Intel
 - groq api key (free tier works fine)
 - accessibility permission (for the global hotkey event tap)
 - microphone permission
 
 ## privacy
 
-- audio is sent to groq for transcription (their api, their privacy policy)
-- transcript text is sent to groq's llm for cleanup
-- nothing is logged to disk or sent anywhere else
-- your api key is stored in the system keychain
-- all history and corrections are stored locally in `~/Library/Application Support/LazyFlow/`
+- audio is sent to groq for transcription and transcript text is sent to groq's llm for cleanup — groq's api terms and privacy policy apply to both
+- no telemetry or debug logs are sent or stored anywhere
+- your api key is stored in the system keychain, never on disk in plaintext
+- history and corrections are stored locally in sqlite at `~/Library/Application Support/LazyFlow/` — they never leave your machine

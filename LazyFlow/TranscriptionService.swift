@@ -41,7 +41,9 @@ struct TranscriptionService {
 
         let (data, response) = try await URLSession.shared.data(for: request)
         let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+#if DEBUG
         print("[LazyFlow] 📡 HTTP \(statusCode)")
+#endif
 
         if let http = response as? HTTPURLResponse, http.statusCode != 200 {
             let rawBody = String(data: data, encoding: .utf8) ?? "unknown"

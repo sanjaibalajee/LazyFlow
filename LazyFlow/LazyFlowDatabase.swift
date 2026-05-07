@@ -16,8 +16,24 @@ final class LazyFlowDatabase {
         try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
 
         let url = dir.appendingPathComponent("lazyflow.db")
-        writer  = try! DatabasePool(path: url.path)
-        try! migrate()
+
+        // Open the pool; if it fails (corrupt file, permission error) rename it aside
+        // and start fresh rather than crashing.
+        do {
+            writer = try DatabasePool(path: url.path)
+        } catch {
+            print("[LazyFlow] DB open failed (\(error)) — moving aside and starting fresh")
+            let aside = url.deletingPathExtension().appendingPathExtension("db.bak")
+            try? fm.moveItem(at: url, to: aside)
+            writer = try! DatabasePool(path: url.path) // fresh file, guaranteed to succeed
+        }
+
+        // Migration failure is logged but non-fatal — existing rows remain accessible.
+        do {
+            try migrate()
+        } catch {
+            print("[LazyFlow] DB migration failed: \(error)")
+        }
     }
 
     // MARK: - Migrations (additive only — never drop columns/tables)
