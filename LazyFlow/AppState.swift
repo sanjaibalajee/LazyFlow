@@ -44,9 +44,15 @@ final class AppState {
         didSet { UserDefaults.standard.set(llmModel, forKey: "lazyflow_llm_model") }
     }
 
+    // MARK: - Toggle / overlay state
+
+    var isToggleMode: Bool = false
+    private(set) var targetAppName: String?
+
     // MARK: - Callbacks (used by AppDelegate for non-SwiftUI observers)
 
-    var onRecordingChanged: ((Bool) -> Void)?
+    var onRecordingChanged:   ((Bool) -> Void)?
+    var onRecordingCancelled: (() -> Void)?  // notifies HotkeyManager to reset its state
 
     // MARK: - Profiles
 
@@ -90,6 +96,7 @@ final class AppState {
 
         // Capture the frontmost app NOW — before any async work
         recordingTargetApp = NSWorkspace.shared.frontmostApplication
+        targetAppName      = recordingTargetApp?.localizedName
 
         audioCapture.onLevelUpdate = { [weak self] level in
             Task { @MainActor [weak self] in self?.audioLevel = level }
@@ -181,25 +188,30 @@ final class AppState {
             do {
                 let raw = try await stt.transcribe(audioURL: url, vocabularyHint: sttHint)
 
+                // Strip vocal fillers before corrections and LLM — deterministic, cheap, and
+                // catches cases the LLM might miss. Skipped when keepFillerWords is toggled on.
+                let filterFillers = profile.map { !$0.formattingOptions.keepFillerWords } ?? true
+                let defiltered    = filterFillers ? FillerWordFilter.filter(raw) : raw
+
                 // Post-processing is best-effort — STT result is never lost if LLM fails
-                var final = raw
+                var final = defiltered
                 if let p = profile {
                     do {
                         let corrections = correctionStore.relevantCorrections(
-                            for: raw, bundleID: p.bundleIdentifier
+                            for: defiltered, bundleID: p.bundleIdentifier
                         )
                         // All corrections are applied as exact Swift substitutions before the
                         // LLM sees the text. LLM-based substitution is unreliable for proper
                         // names — the model capitalises, rephrases, or skips them unpredictably.
-                        let preApplied = applyCorrections(raw, corrections: corrections)
+                        let preApplied = applyCorrections(defiltered, corrections: corrections)
                         final = try await llm.process(rawTranscript: preApplied, profile: p,
                                                       corrections: [])
                         if !corrections.isEmpty {
                             correctionStore.incrementFrequency(for: corrections.map(\.id))
                         }
                     } catch {
-                        print("[LazyFlow] ⚠️ Cleanup failed, pasting raw transcript: \(error.localizedDescription)")
-                        errorMessage = "Cleanup unavailable — raw transcript pasted."
+                        print("[LazyFlow] ⚠️ Cleanup failed, pasting filtered transcript: \(error.localizedDescription)")
+                        errorMessage = "Cleanup unavailable — transcript pasted."
                     }
                 }
 
@@ -224,8 +236,11 @@ final class AppState {
         isRecording       = false
         recordingMode     = .idle
         audioLevel        = 0
+        isToggleMode      = false
+        targetAppName     = nil
         liveTranscript    = ""
         onRecordingChanged?(false)
+        onRecordingCancelled?()
     }
 
     func clearError() { errorMessage = nil }
@@ -295,9 +310,36 @@ final class AppState {
     private func finishProcessing(transcript: String, appName: String?, bundleIdentifier: String?) {
         currentTranscript = transcript
         recordingMode     = .idle
+        targetAppName     = nil
         guard !transcript.isEmpty else { return }
         let entry = TranscriptEntry(text: transcript, appName: appName, bundleIdentifier: bundleIdentifier)
         transcriptStore.insert(entry)
+    }
+}
+
+// MARK: - Filler Word Filter
+
+private enum FillerWordFilter {
+    // Matches common vocal fillers (uh, um, er, hmm, etc.) plus optional trailing comma/period.
+    // Word boundaries prevent clipping real words ("umbrella", "uh-oh", etc.).
+    private static let pattern = try! NSRegularExpression(
+        pattern: #"(?i)\b(u+h+|u+m+|e+r+|h?mm+|mhm)\b[,.]?\s*|uh-huh[,.]?\s*"#
+    )
+
+    static func filter(_ text: String) -> String {
+        var result = pattern.stringByReplacingMatches(
+            in: text,
+            range: NSRange(text.startIndex..., in: text),
+            withTemplate: " "
+        )
+        // Collapse runs of spaces left by removals
+        while result.contains("  ") { result = result.replacingOccurrences(of: "  ", with: " ") }
+        result = result.trimmingCharacters(in: .whitespaces)
+        // Re-capitalize if a leading filler was removed
+        if let first = result.first, first.isLowercase {
+            result = first.uppercased() + result.dropFirst()
+        }
+        return result
     }
 }
 
