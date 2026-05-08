@@ -1,40 +1,45 @@
-import Cocoa
+import AppKit
+import ApplicationServices
 
 enum HotkeyError: LocalizedError {
     case accessibilityDenied
-    case tapCreationFailed
     var errorDescription: String? {
-        switch self {
-        case .accessibilityDenied:
-            return "Accessibility permission required — go to System Settings → Privacy & Security → Accessibility, enable LazyFlow, then relaunch."
-        case .tapCreationFailed:
-            return "Failed to create keyboard event tap. Toggle Accessibility off and on in System Settings, then relaunch."
-        }
+        "Accessibility permission required — go to System Settings → Privacy & Security → Accessibility, enable LazyFlow, then relaunch."
     }
-}
-
-private func tapCallback(
-    _ proxy: CGEventTapProxy,
-    _ type: CGEventType,
-    _ event: CGEvent,
-    _ refcon: UnsafeMutableRawPointer?
-) -> Unmanaged<CGEvent>? {
-    guard let refcon else { return Unmanaged.passRetained(event) }
-    return Unmanaged<HotkeyManager>.fromOpaque(refcon)
-        .takeUnretainedValue()
-        .handle(type: type, event: event)
 }
 
 final class HotkeyManager {
     // Right Option ⌥ — keyCode 61
-    static let triggerKeyCode: Int64 = 61
+    static let triggerKeyCode: UInt16 = 61
 
-    var onKeyDown: (() -> Void)?
-    var onKeyUp:   (() -> Void)?
+    var onStartRecording:   (() -> Void)?
+    var onStopRecording:    (() -> Void)?
+    var onCancelRecording:  (() -> Void)?
+    var onToggleModeActive: ((Bool) -> Void)?
 
-    private var tap:      CFMachPort?
-    private var source:   CFRunLoopSource?
-    private var keyIsDown = false
+    // MARK: - State machine
+
+    private enum State {
+        case idle
+        case pressed(at: Date)
+        case holdRecording
+        case awaitingDoubleTap
+        case toggleRecording
+    }
+
+    private var state: State = .idle
+    private var holdWorkItem:      DispatchWorkItem?
+    private var doubleTapWorkItem: DispatchWorkItem?
+
+    private static let holdThreshold:   TimeInterval = 0.15
+    private static let doubleTapWindow: TimeInterval = 0.35
+
+    // MARK: - NSEvent monitors
+
+    private var globalFlagsMonitor: Any?
+    private var localFlagsMonitor:  Any?
+    private var globalKeyMonitor:   Any?
+    private var localKeyMonitor:    Any?
 
     func start() throws {
         guard AXIsProcessTrusted() else {
@@ -43,50 +48,118 @@ final class HotkeyManager {
             throw HotkeyError.accessibilityDenied
         }
 
-        let mask: CGEventMask =
-            (1 << CGEventType.flagsChanged.rawValue) |
-            (1 << CGEventType.tapDisabledByTimeout.rawValue)
-
-        guard let eventTap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
-            eventsOfInterest: mask,
-            callback: tapCallback,
-            userInfo: Unmanaged.passUnretained(self).toOpaque()
-        ) else { throw HotkeyError.tapCreationFailed }
-
-        tap    = eventTap
-        let rs = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, eventTap, 0)
-        source = rs
-        CFRunLoopAddSource(CFRunLoopGetMain(), rs, .commonModes)
-        CGEvent.tapEnable(tap: eventTap, enable: true)
+        globalFlagsMonitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+            self?.handleFlags(event)
+        }
+        localFlagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+            self?.handleFlags(event)
+            return event
+        }
+        // Escape key cancels an in-progress recording (monitor only — does not consume the event)
+        globalKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            if event.keyCode == 53 { DispatchQueue.main.async { self?.processEscape() } }
+        }
+        localKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            if event.keyCode == 53 { DispatchQueue.main.async { self?.processEscape() } }
+            return event
+        }
     }
 
     func stop() {
-        if let t = tap    { CGEvent.tapEnable(tap: t, enable: false) }
-        if let s = source { CFRunLoopRemoveSource(CFRunLoopGetMain(), s, .commonModes) }
-        tap = nil; source = nil
+        [globalFlagsMonitor, localFlagsMonitor, globalKeyMonitor, localKeyMonitor]
+            .compactMap { $0 }
+            .forEach { NSEvent.removeMonitor($0) }
+        globalFlagsMonitor = nil; localFlagsMonitor = nil
+        globalKeyMonitor   = nil; localKeyMonitor   = nil
+        cancelTimers()
+        state = .idle
     }
 
-    func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
-        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            if let t = tap { CGEvent.tapEnable(tap: t, enable: true) }
-            return nil
-        }
+    // Called externally when recording is cancelled via UI (cancel button) so state stays consistent
+    func forceReset() {
+        cancelTimers()
+        if case .toggleRecording = state { onToggleModeActive?(false) }
+        state = .idle
+    }
 
-        guard type == .flagsChanged,
-              event.getIntegerValueField(.keyboardEventKeycode) == Self.triggerKeyCode
-        else { return Unmanaged.passRetained(event) }
+    // MARK: - Event handling
 
-        let nowDown = event.flags.contains(.maskAlternate)
-        if nowDown && !keyIsDown {
-            keyIsDown = true
-            DispatchQueue.main.async { [weak self] in self?.onKeyDown?() }
-        } else if !nowDown && keyIsDown {
-            keyIsDown = false
-            DispatchQueue.main.async { [weak self] in self?.onKeyUp?() }
+    private func handleFlags(_ event: NSEvent) {
+        guard event.keyCode == Self.triggerKeyCode else { return }
+        let isDown = event.modifierFlags.contains(.option)
+        DispatchQueue.main.async { [weak self] in self?.transition(isDown: isDown) }
+    }
+
+    private func transition(isDown: Bool) {
+        switch state {
+
+        case .idle:
+            guard isDown else { return }
+            state = .pressed(at: Date())
+            schedule(&holdWorkItem, after: Self.holdThreshold) { [weak self] in
+                guard case .pressed = self?.state else { return }
+                self?.state = .holdRecording
+                self?.onStartRecording?()
+            }
+
+        case .pressed:
+            guard !isDown else { return }
+            // Released before hold threshold → short tap, wait for double-tap
+            holdWorkItem?.cancel(); holdWorkItem = nil
+            state = .awaitingDoubleTap
+            schedule(&doubleTapWorkItem, after: Self.doubleTapWindow) { [weak self] in
+                guard case .awaitingDoubleTap = self?.state else { return }
+                self?.state = .idle
+            }
+
+        case .awaitingDoubleTap:
+            guard isDown else { return }
+            // Second press within window → toggle mode
+            doubleTapWorkItem?.cancel(); doubleTapWorkItem = nil
+            state = .toggleRecording
+            onToggleModeActive?(true)
+            onStartRecording?()
+
+        case .holdRecording:
+            guard !isDown else { return }
+            state = .idle
+            onStopRecording?()
+
+        case .toggleRecording:
+            guard isDown else { return }
+            // Any press stops toggle recording
+            state = .idle
+            onToggleModeActive?(false)
+            onStopRecording?()
         }
-        return Unmanaged.passRetained(event)
+    }
+
+    private func processEscape() {
+        switch state {
+        case .holdRecording:
+            cancelTimers()
+            state = .idle
+            onCancelRecording?()
+        case .toggleRecording:
+            cancelTimers()
+            state = .idle
+            onToggleModeActive?(false)
+            onCancelRecording?()
+        default:
+            break
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func cancelTimers() {
+        holdWorkItem?.cancel();      holdWorkItem = nil
+        doubleTapWorkItem?.cancel(); doubleTapWorkItem = nil
+    }
+
+    private func schedule(_ item: inout DispatchWorkItem?, after delay: TimeInterval, block: @escaping () -> Void) {
+        let work = DispatchWorkItem(block: block)
+        item = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
 }
