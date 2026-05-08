@@ -84,9 +84,14 @@ final class HotkeyManager {
 
     // MARK: - Event handling
 
+    // Device-dependent mask for the physical right-Option key.
+    // Using the device-independent .option flag would miss a right-Option release
+    // when left-Option is simultaneously held, because .option stays set.
+    private static let NX_DEVICERALTKEYMASK: UInt = 0x0000_0040
+
     private func handleFlags(_ event: NSEvent) {
         guard event.keyCode == Self.triggerKeyCode else { return }
-        let isDown = event.modifierFlags.contains(.option)
+        let isDown = (event.modifierFlags.rawValue & Self.NX_DEVICERALTKEYMASK) != 0
         DispatchQueue.main.async { [weak self] in self?.transition(isDown: isDown) }
     }
 
