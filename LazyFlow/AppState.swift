@@ -26,24 +26,30 @@ final class AppState {
     let transcriptStore  = TranscriptStore()
     let correctionStore  = CorrectionStore()
 
-    // MARK: - Settings  (API key stored in Keychain; model choices in UserDefaults)
+    // MARK: - Multi-provider store
+
+    let providerStore = LLMProviderStore.shared
+
+    // MARK: - Groq API key (STT always uses Groq Whisper — kept for backward compat)
 
     var apiKey: String = Keychain.load(forKey: "groq_api_key") ?? "" {
         didSet {
             apiKey.isEmpty
                 ? Keychain.delete(forKey: "groq_api_key")
                 : Keychain.save(apiKey, forKey: "groq_api_key")
+            providerStore.migrateGroqKey(apiKey)
         }
     }
 
-    // Cloud STT model (Groq)
+    // Cloud STT model (Groq Whisper only)
     var sttModel: String = UserDefaults.standard.string(forKey: "lazyflow_stt_model") ?? "whisper-large-v3" {
         didSet { UserDefaults.standard.set(sttModel, forKey: "lazyflow_stt_model") }
     }
 
-    // Cloud LLM model (Groq)
-    var llmModel: String = UserDefaults.standard.string(forKey: "lazyflow_llm_model") ?? "llama-3.3-70b-versatile" {
-        didSet { UserDefaults.standard.set(llmModel, forKey: "lazyflow_llm_model") }
+    // Cloud LLM — forwarded through provider store for UI compatibility
+    var llmModel: String {
+        get { providerStore.dictationModel }
+        set { providerStore.dictationModel = newValue }
     }
 
     // STT backend
@@ -113,12 +119,29 @@ final class AppState {
 
     let profileStore = AppProfileStore()
 
+    // MARK: - Knowledge Base
+
+    let knowledgeStore = KnowledgeStore.shared
+
+    // MARK: - Goal recording (STT-only, no LLM — used by Computer Use goal input)
+
+    private(set) var goalRecordingMode = false
+    var onGoalTranscribed: ((String) -> Void)?
+
+    func startGoalRecording() {
+        goalRecordingMode = true
+        startRecording()
+    }
+
     // MARK: - Private state
 
     private let audioCapture = AudioCapture()
 
     // Target app captured at recording START so paste always goes to the right place
     private var recordingTargetApp: NSRunningApplication?
+
+    // Focus context captured at recording START — the field that was focused when dictation began
+    private var recordingFocusContext: FocusContext?
 
     // MARK: - Recording Pipeline
 
@@ -150,8 +173,10 @@ final class AppState {
         currentTranscript = ""
 
         // Capture the frontmost app NOW — before any async work
-        recordingTargetApp = NSWorkspace.shared.frontmostApplication
-        targetAppName      = recordingTargetApp?.localizedName
+        recordingTargetApp  = NSWorkspace.shared.frontmostApplication
+        targetAppName       = recordingTargetApp?.localizedName
+        // Capture the focused field now so context is correct even if focus changes during recording
+        recordingFocusContext = recordingTargetApp.flatMap { FocusContextService.capture(for: $0) }
 
         audioCapture.onLevelUpdate = { [weak self] level in
             Task { @MainActor [weak self] in self?.audioLevel = level }
@@ -177,10 +202,17 @@ final class AppState {
 
         let audioURL      = audioCapture.outputURL
         let cloudSTT      = TranscriptionService(apiKey: apiKey, model: sttModel)
-        let cloudLLM      = PostProcessingService(apiKey: apiKey, model: llmModel)
+        let dictCfg       = providerStore.config(for: .dictation)
+        let cloudLLM      = PostProcessingService(
+            apiKey:  dictCfg.apiKey.isEmpty  ? apiKey  : dictCfg.apiKey,
+            baseURL: dictCfg.baseURL.isEmpty ? "https://api.groq.com/openai/v1" : dictCfg.baseURL,
+            model:   dictCfg.model.isEmpty   ? llmModel : dictCfg.model
+        )
         let capturedSTTBackend = sttBackend
         let capturedLLMBackend = llmBackend
-        let targetApp = recordingTargetApp
+        let targetApp    = recordingTargetApp
+        let capturedKB   = knowledgeStore.contextBlock
+        let capturedFocus = recordingFocusContext
         // Only create a profile for apps with a real bundle ID — nil-bundle apps
         // (e.g. some system processes) are excluded so they don't share a junk profile.
         let profile: AppProfile? = targetApp.flatMap { app in
@@ -257,6 +289,17 @@ final class AppState {
                     raw = try await localSTT.transcribe(audioURL: url, vocabularyHint: sttHint)
                 }
 
+                // Goal recording: deliver raw transcript directly, skip all LLM processing
+                if goalRecordingMode {
+                    goalRecordingMode = false
+                    let goal = FillerWordFilter.filter(raw)
+                    Task { @MainActor [weak self] in
+                        self?.recordingMode = .idle
+                        self?.onGoalTranscribed?(goal)
+                    }
+                    return
+                }
+
                 // Strip vocal fillers before corrections and LLM — deterministic, cheap, and
                 // catches cases the LLM might miss. Skipped when keepFillerWords is toggled on.
                 let filterFillers = profile.map { !$0.formattingOptions.keepFillerWords } ?? true
@@ -276,11 +319,19 @@ final class AppState {
                         // Route LLM: cloud (Groq) or on-device (MLX)
                         switch capturedLLMBackend {
                         case .cloud:
-                            final = try await cloudLLM.process(rawTranscript: preApplied, profile: p,
-                                                               corrections: [])
+                            final = try await cloudLLM.process(
+                                rawTranscript: preApplied,
+                                profile: p,
+                                corrections: [],
+                                kbContext: capturedKB,
+                                focusContext: capturedFocus)
                         case .local:
-                            final = try await localLLM.process(rawTranscript: preApplied, profile: p,
-                                                               corrections: [])
+                            final = try await localLLM.process(
+                                rawTranscript: preApplied,
+                                profile: p,
+                                corrections: [],
+                                kbContext: capturedKB,
+                                focusContext: capturedFocus)
                         }
                         if !corrections.isEmpty {
                             correctionStore.incrementFrequency(for: corrections.map(\.id))
@@ -309,12 +360,13 @@ final class AppState {
     func cancelRecording() {
         audioCapture.stop()
         audioCapture.cleanup()
-        isRecording       = false
-        recordingMode     = .idle
-        audioLevel        = 0
-        isToggleMode      = false
-        targetAppName     = nil
-        liveTranscript    = ""
+        isRecording           = false
+        recordingMode         = .idle
+        audioLevel            = 0
+        isToggleMode          = false
+        targetAppName         = nil
+        recordingFocusContext = nil
+        liveTranscript        = ""
         onRecordingChanged?(false)
         onRecordingCancelled?()
     }

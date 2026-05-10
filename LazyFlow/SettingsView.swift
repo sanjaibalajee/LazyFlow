@@ -8,7 +8,7 @@ struct SettingsView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                apiSection()
+                providerSection()
                 Divider().padding(.horizontal, 20)
                 transcriptionSection()
                 Divider().padding(.horizontal, 20)
@@ -16,44 +16,57 @@ struct SettingsView: View {
             }
         }
         .frame(width: 520)
-        .onAppear {
-            if !Self.cloudLLMPresets.map(\.id).contains(appState.llmModel) {
-                customLLMText = appState.llmModel
-            }
-        }
     }
 
-    // MARK: - API Key
+    // MARK: - Provider section
 
     @ViewBuilder
-    private func apiSection() -> some View {
-        @Bindable var appState = appState
-        VStack(alignment: .leading, spacing: 12) {
-            SectionHeader(icon: "key.fill", title: "Groq API Key")
-            Text("Required for cloud transcription and post-processing. Not needed when using on-device models.")
+    private func providerSection() -> some View {
+        @Bindable var store = appState.providerStore
+        VStack(alignment: .leading, spacing: 16) {
+            SectionHeader(icon: "wand.and.stars", title: "AI Providers")
+            Text("Keys stored in the system Keychain. Click the lock to edit a key.")
                 .font(.caption).foregroundStyle(.secondary)
 
-            HStack(spacing: 8) {
-                Group {
-                    if apiKeyVisible {
-                        TextField("gsk_…", text: $appState.apiKey)
-                    } else {
-                        SecureField("gsk_…", text: $appState.apiKey)
-                    }
+            // Per-provider key rows
+            let providers = LLMProvider.allCases.filter { $0 != .custom }
+            VStack(spacing: 0) {
+                ForEach(providers) { provider in
+                    ProviderKeyRow(provider: provider, store: appState.providerStore)
+                    if provider != providers.last { Divider().padding(.leading, 34) }
                 }
-                .textFieldStyle(.roundedBorder)
-                .font(.system(.body, design: .monospaced))
+            }
+            .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
 
-                Button { apiKeyVisible.toggle() } label: {
-                    Image(systemName: apiKeyVisible ? "eye.slash" : "eye").foregroundStyle(.secondary)
-                }.buttonStyle(.plain)
+            // Dictation: Groq-only, model picker only
+            VStack(alignment: .leading, spacing: 6) {
+                Label("Dictation Model", systemImage: "waveform.badge.mic")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+
+                HStack(spacing: 8) {
+                    Text("Groq")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.tertiary)
+                        .frame(width: 36, alignment: .leading)
+
+                    Picker("", selection: $store.dictationModel) {
+                        ForEach(LLMProvider.groq.presetModels) { m in
+                            HStack {
+                                Text(m.name)
+                                if let b = m.badge {
+                                    Text("· \(b)").foregroundStyle(.secondary).font(.caption)
+                                }
+                            }.tag(m.id)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 200)
+                }
             }
 
-            HStack(spacing: 4) {
-                Image(systemName: "lock.fill").font(.caption2).foregroundStyle(.tertiary)
-                Text("Stored in the system keychain. Get a free key at [groq.com](https://groq.com)")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
+            // Agent: full provider + model picker
+            AgentModelPicker(store: appState.providerStore)
         }
         .padding(20)
     }
@@ -198,6 +211,152 @@ struct SettingsView: View {
         .init(id: "mixtral-8x7b-32768",      name: "Mixtral 8×7B",         description: "Strong on longer content"),
         .init(id: "openai/gpt-oss-20b",      name: "GPT OSS 20B",          description: "Previous default · OpenAI via Groq"),
     ]
+}
+
+// MARK: - Provider key row (locked by default, unlock to edit)
+
+private struct ProviderKeyRow: View {
+    let provider:    LLMProvider
+    @Bindable var store: LLMProviderStore
+
+    @State private var isEditing = false
+    @State private var draft     = ""
+    @FocusState private var fieldFocused: Bool
+
+    private var storedKey: String { store.apiKey(for: provider) }
+    private var hasKey:    Bool   { !storedKey.isEmpty }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            // Provider identity
+            Image(systemName: provider.icon)
+                .font(.system(size: 11))
+                .foregroundStyle(hasKey ? Color.accentColor : Color.secondary)
+                .frame(width: 20)
+
+            Text(provider.displayName)
+                .font(.system(size: 13))
+                .frame(width: 124, alignment: .leading)
+
+            if isEditing {
+                // Edit mode — text field + Save / Cancel
+                SecureField(keyPlaceholder, text: $draft)
+                    .font(.system(size: 12, design: .monospaced))
+                    .textFieldStyle(.roundedBorder)
+                    .focused($fieldFocused)
+                    .onSubmit { save() }
+
+                Button("Save") { save() }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty &&
+                              draft != storedKey)
+
+                Button("Cancel") {
+                    draft = ""
+                    isEditing = false
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+            } else {
+                // Locked — show masked key or placeholder
+                Group {
+                    if hasKey {
+                        Text(String(repeating: "•", count: 20))
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("No key")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                // Lock/unlock button
+                Button {
+                    draft = ""  // never pre-fill with the actual key
+                    isEditing = true
+                    fieldFocused = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: hasKey ? "lock.fill" : "plus.circle")
+                            .font(.system(size: 11))
+                        Text(hasKey ? "Change" : "Add Key")
+                            .font(.system(size: 11))
+                    }
+                    .foregroundStyle(Color.accentColor)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .animation(.easeInOut(duration: 0.15), value: isEditing)
+    }
+
+    private func save() {
+        let trimmed = draft.trimmingCharacters(in: .whitespaces)
+        if !trimmed.isEmpty { store.setApiKey(trimmed, for: provider) }
+        draft = ""
+        isEditing = false
+    }
+
+    private var keyPlaceholder: String {
+        switch provider {
+        case .groq:      "gsk_…"
+        case .openai:    "sk-…"
+        case .google:    "AIza…"
+        case .anthropic: "sk-ant-…"
+        default:         "API key"
+        }
+    }
+}
+
+// MARK: - Agent model picker (full provider + model)
+
+private struct AgentModelPicker: View {
+    @Bindable var store: LLMProviderStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label("Computer Use Agent", systemImage: "sparkles")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 8) {
+                Picker("", selection: $store.agentProvider) {
+                    ForEach(LLMProvider.allCases.filter { $0 != .custom }) { p in
+                        Text(p.displayName).tag(p)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 150)
+                .onChange(of: store.agentProvider) { _, p in
+                    store.agentModel = p.defaultModel(for: .agent)
+                }
+
+                Picker("", selection: $store.agentModel) {
+                    ForEach(store.agentProvider.presetModels) { m in
+                        HStack {
+                            Text(m.name)
+                            if let b = m.badge {
+                                Text("· \(b)").foregroundStyle(.secondary).font(.caption)
+                            }
+                        }.tag(m.id)
+                    }
+                }
+                .labelsHidden()
+
+                // Capability badges for selected model
+                if let spec = store.agentProvider.presetModels.first(where: { $0.id == store.agentModel }) {
+                    if spec.vision { badgePill("Vision", color: .blue)  }
+                    if spec.tools  { badgePill("Tools",  color: .purple) }
+                }
+            }
+        }
+    }
 }
 
 // MARK: - Cloud model card

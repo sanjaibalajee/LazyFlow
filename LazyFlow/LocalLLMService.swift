@@ -66,7 +66,9 @@ actor LocalLLMService {
 
     func process(rawTranscript: String,
                  profile: AppProfile,
-                 corrections: [CorrectionEntry] = []) async throws -> String {
+                 corrections: [CorrectionEntry] = [],
+                 kbContext: String? = nil,
+                 focusContext: FocusContext? = nil) async throws -> String {
         guard let container else { throw LocalLLMError.notLoaded }
         guard let (setup, style) = profile.resolvedPromptComponents else { return rawTranscript }
 
@@ -75,7 +77,35 @@ actor LocalLLMService {
             let pairs = corrections.map { "- \"\($0.heard)\" → \"\($0.correct)\"" }.joined(separator: "\n")
             systemPrompt += "\n\nSpeech correction pairs (correct before applying formatting):\n\(pairs)"
         }
-        systemPrompt += "\n\n" + style
+
+        var styleBlock = style
+
+        if let focus = focusContext {
+            styleBlock += """
+
+
+            SMART FILL — STRICT RULES (override everything above):
+            You are populating \(focus.description).
+            Output ONLY the exact text to insert into that field. Nothing else.
+            - No field-name prefix (never "First Name: value" — just "value")
+            - No punctuation added around the value
+            - No explanation, preamble, or trailing text
+            - "First Name" / "given name" / "forename" → first name only
+            - "Last Name" / "surname" / "family name" → last name only
+            - "Full Name" / "name" → complete name
+            - "Email" / "email address" → email only
+            - "Phone" / "mobile" / "tel" → phone number only
+            - "Company" / "organisation" → company name only
+            - "Job Title" / "title" / "role" → job title only
+            - "Location" / "city" / "address" → location only
+            - "Website" / "URL" → URL only
+            \(kbContext.map { "\n" + $0 } ?? "")
+            Output the field value only. One line. No label.
+            """
+        } else if let kb = kbContext {
+            styleBlock += "\n\nUser profile (use when relevant to the transcript):\n\(kb)"
+        }
+        systemPrompt += "\n\n" + styleBlock
 
         // /no_think suppresses Qwen3's chain-of-thought. Thinking adds no quality for
         // deterministic formatting tasks and burned all 4096 tokens without finishing.

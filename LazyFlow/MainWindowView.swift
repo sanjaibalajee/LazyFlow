@@ -419,19 +419,91 @@ struct HistoryView: View {
     }
 }
 
-// MARK: - Knowledge Base placeholder
+// MARK: - Knowledge Base
 
 struct KnowledgeBaseView: View {
+    @Environment(AppState.self) private var appState
+
+    @State private var drafts: [KBField: String] = [:]
+
+    private var store: KnowledgeStore { appState.knowledgeStore }
+
     var body: some View {
-        ContentUnavailableView(
-            "Knowledge Base",
-            systemImage: "brain",
-            description: Text(
-                "Store personal facts — your name, address, job title, preferred phrases — " +
-                "so LazyFlow can fill forms and draft text using your real information " +
-                "instead of placeholders. Coming in a future update."
-            )
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Label("Smart Fill Profile", systemImage: "person.text.rectangle")
+                    .font(.headline)
+                Text("Stored locally. Injected into every LLM call so the AI can fill fields and personalise output using your real information.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+
+            Divider().padding(.horizontal, 20)
+
+            VStack(spacing: 0) {
+                ForEach(KBField.allCases, id: \.rawValue) { field in
+                    fieldRow(field)
+                    if field != KBField.allCases.last {
+                        Divider().padding(.leading, 52)
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+
+            if store.contextBlock == nil {
+                HStack(spacing: 6) {
+                    Image(systemName: "info.circle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("Fill in at least one field to activate Smart Fill.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 4)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .onAppear { syncDrafts() }
+    }
+
+    @ViewBuilder
+    private func fieldRow(_ field: KBField) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: field.icon)
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+                .frame(width: 20, alignment: .center)
+
+            Text(field.displayName)
+                .font(.system(size: 13))
+                .foregroundStyle(.primary)
+                .frame(width: 88, alignment: .leading)
+
+            TextField(field.placeholder, text: binding(for: field))
+                .font(.system(size: 13))
+                .textFieldStyle(.plain)
+                .onChange(of: drafts[field] ?? "") { _, newValue in
+                    store.set(field: field, value: newValue)
+                }
+        }
+        .padding(.vertical, 9)
+    }
+
+    private func binding(for field: KBField) -> Binding<String> {
+        Binding(
+            get: { drafts[field] ?? "" },
+            set: { drafts[field] = $0 }
         )
+    }
+
+    private func syncDrafts() {
+        for field in KBField.allCases {
+            drafts[field] = store.value(for: field)
+        }
     }
 }
 

@@ -24,7 +24,9 @@ struct PostProcessingService {
 
     func process(rawTranscript: String,
                  profile: AppProfile,
-                 corrections: [CorrectionEntry] = []) async throws -> String {
+                 corrections: [CorrectionEntry] = [],
+                 kbContext: String? = nil,
+                 focusContext: FocusContext? = nil) async throws -> String {
         guard let (setup, style) = profile.resolvedPromptComponents, !apiKey.isEmpty else {
             return rawTranscript
         }
@@ -38,7 +40,38 @@ struct PostProcessingService {
                 .joined(separator: "\n")
             systemPrompt += "\n\nSpeech correction pairs (correct these speech recognition errors before applying formatting):\n\(pairs)"
         }
-        systemPrompt += "\n\n" + style
+
+        var styleBlock = style
+
+        if let focus = focusContext {
+            // Smart Fill mode: override output to be a bare field value.
+            // Append AFTER the regular style so these rules win.
+            styleBlock += """
+
+
+            SMART FILL — STRICT RULES (override everything above):
+            You are populating \(focus.description).
+            Output ONLY the exact text to insert into that field. Nothing else.
+            - No field-name prefix (never output "First Name: value" — just output "value")
+            - No punctuation added around the value
+            - No explanation, preamble, or trailing text
+            - For a "First Name" / "given name" / "forename" field → output the first name only
+            - For a "Last Name" / "surname" / "family name" field → output the last name only
+            - For a "Full Name" / "name" field → output the complete name
+            - For "Email" / "email address" → output the email address only
+            - For "Phone" / "mobile" / "tel" → output the phone number only
+            - For "Company" / "organisation" / "employer" → output the company name only
+            - For "Job Title" / "title" / "role" / "position" → output the job title only
+            - For "Location" / "city" / "address" → output the location only
+            - For "Website" / "URL" → output the URL only
+            \(kbContext.map { "\n" + $0 } ?? "")
+            Output the field value only. One line. No label.
+            """
+        } else if let kb = kbContext {
+            styleBlock += "\n\nUser profile (use when relevant to the transcript):\n\(kb)"
+        }
+
+        systemPrompt += "\n\n" + styleBlock
 
         let userMessage = "Input:\n\n\(rawTranscript)"
 
