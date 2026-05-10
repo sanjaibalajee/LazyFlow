@@ -10,6 +10,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         requestMicrophonePermission()
         setupHotkeys()
         observeRecordingState()
+        appState.setupLocalServicesIfNeeded()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

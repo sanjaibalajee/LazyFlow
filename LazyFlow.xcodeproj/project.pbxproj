@@ -9,6 +9,13 @@
 /* Begin PBXBuildFile section */
 		9F0D8BE92FAB89BD00A1AEAB /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 9F0D8BE82FAB89BD00A1AEAB /* Sparkle */; };
 		9F0D8C652FAC761900A1AEAB /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 9F0D8C642FAC761900A1AEAB /* GRDB */; };
+		9F0D8D022FAB88B200A1AEAB /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = 9F0D8D012FAB88B200A1AEAB /* WhisperKit */; };
+		9F0D8D042FAB88B200A1AEAB /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = 9F0D8D032FAB88B200A1AEAB /* FluidAudio */; };
+		9F0D8D062FAB88B200A1AEAB /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = 9F0D8D052FAB88B200A1AEAB /* MLXLLM */; };
+		9F0D8D082FAB88B200A1AEAB /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = 9F0D8D072FAB88B200A1AEAB /* MLXLMCommon */; };
+		9F0D8D0C2FAB88B200A1AEAB /* MLXHuggingFace in Frameworks */ = {isa = PBXBuildFile; productRef = 9F0D8D0B2FAB88B200A1AEAB /* MLXHuggingFace */; };
+		9F0D8D0F2FAB88B200A1AEAB /* HuggingFace in Frameworks */ = {isa = PBXBuildFile; productRef = 9F0D8D0E2FAB88B200A1AEAB /* HuggingFace */; };
+		9F0D8D122FAB88B200A1AEAB /* Tokenizers in Frameworks */ = {isa = PBXBuildFile; productRef = 9F0D8D112FAB88B200A1AEAB /* Tokenizers */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -43,6 +50,13 @@
 			files = (
 				9F0D8BE92FAB89BD00A1AEAB /* Sparkle in Frameworks */,
 				9F0D8C652FAC761900A1AEAB /* GRDB in Frameworks */,
+				9F0D8D022FAB88B200A1AEAB /* WhisperKit in Frameworks */,
+				9F0D8D042FAB88B200A1AEAB /* FluidAudio in Frameworks */,
+				9F0D8D062FAB88B200A1AEAB /* MLXLLM in Frameworks */,
+				9F0D8D082FAB88B200A1AEAB /* MLXLMCommon in Frameworks */,
+				9F0D8D0C2FAB88B200A1AEAB /* MLXHuggingFace in Frameworks */,
+				9F0D8D0F2FAB88B200A1AEAB /* HuggingFace in Frameworks */,
+				9F0D8D122FAB88B200A1AEAB /* Tokenizers in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -87,6 +101,13 @@
 			packageProductDependencies = (
 				9F0D8BE82FAB89BD00A1AEAB /* Sparkle */,
 				9F0D8C642FAC761900A1AEAB /* GRDB */,
+				9F0D8D012FAB88B200A1AEAB /* WhisperKit */,
+				9F0D8D032FAB88B200A1AEAB /* FluidAudio */,
+				9F0D8D052FAB88B200A1AEAB /* MLXLLM */,
+				9F0D8D072FAB88B200A1AEAB /* MLXLMCommon */,
+				9F0D8D0B2FAB88B200A1AEAB /* MLXHuggingFace */,
+				9F0D8D0E2FAB88B200A1AEAB /* HuggingFace */,
+				9F0D8D112FAB88B200A1AEAB /* Tokenizers */,
 			);
 			productName = LazyFlow;
 			productReference = 9F0D8BD72FAB86A500A1AEAB /* LazyFlow.app */;
@@ -121,6 +142,10 @@
 				9F0D8BE62FAB896400A1AEAB /* XCRemoteSwiftPackageReference "mlx-swift" */,
 				9F0D8BE72FAB89BD00A1AEAB /* XCRemoteSwiftPackageReference "Sparkle" */,
 				9F0D8C632FAC761900A1AEAB /* XCRemoteSwiftPackageReference "GRDB" */,
+				9F0D8D092FAB88B200A1AEAB /* XCRemoteSwiftPackageReference "FluidAudio" */,
+				9F0D8D0A2FAB88B200A1AEAB /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
+				9F0D8D0D2FAB88B200A1AEAB /* XCRemoteSwiftPackageReference "swift-huggingface" */,
+				9F0D8D102FAB88B200A1AEAB /* XCRemoteSwiftPackageReference "swift-transformers" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 9F0D8BD82FAB86A500A1AEAB /* Products */;
@@ -413,8 +438,40 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/groue/GRDB.swift";
 			requirement = {
-				minimumVersion = "6.0.0";
 				kind = upToNextMajorVersion;
+				minimumVersion = 6.0.0;
+			};
+		};
+		9F0D8D092FAB88B200A1AEAB /* XCRemoteSwiftPackageReference "FluidAudio" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/FluidInference/FluidAudio.git";
+			requirement = {
+				kind = upToNextMinorVersion;
+				minimumVersion = 0.12.6;
+			};
+		};
+		9F0D8D0A2FAB88B200A1AEAB /* XCRemoteSwiftPackageReference "mlx-swift-lm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ml-explore/mlx-swift-lm";
+			requirement = {
+				kind = upToNextMinorVersion;
+				minimumVersion = 3.31.3;
+			};
+		};
+		9F0D8D0D2FAB88B200A1AEAB /* XCRemoteSwiftPackageReference "swift-huggingface" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/huggingface/swift-huggingface.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.9.0;
+			};
+		};
+		9F0D8D102FAB88B200A1AEAB /* XCRemoteSwiftPackageReference "swift-transformers" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/huggingface/swift-transformers";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.3.2;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
@@ -429,6 +486,41 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 9F0D8C632FAC761900A1AEAB /* XCRemoteSwiftPackageReference "GRDB" */;
 			productName = GRDB;
+		};
+		9F0D8D012FAB88B200A1AEAB /* WhisperKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9F0D8BE52FAB88B200A1AEAB /* XCRemoteSwiftPackageReference "WhisperKit" */;
+			productName = WhisperKit;
+		};
+		9F0D8D032FAB88B200A1AEAB /* FluidAudio */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9F0D8D092FAB88B200A1AEAB /* XCRemoteSwiftPackageReference "FluidAudio" */;
+			productName = FluidAudio;
+		};
+		9F0D8D052FAB88B200A1AEAB /* MLXLLM */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9F0D8D0A2FAB88B200A1AEAB /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
+			productName = MLXLLM;
+		};
+		9F0D8D072FAB88B200A1AEAB /* MLXLMCommon */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9F0D8D0A2FAB88B200A1AEAB /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
+			productName = MLXLMCommon;
+		};
+		9F0D8D0B2FAB88B200A1AEAB /* MLXHuggingFace */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9F0D8D0A2FAB88B200A1AEAB /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
+			productName = MLXHuggingFace;
+		};
+		9F0D8D0E2FAB88B200A1AEAB /* HuggingFace */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9F0D8D0D2FAB88B200A1AEAB /* XCRemoteSwiftPackageReference "swift-huggingface" */;
+			productName = HuggingFace;
+		};
+		9F0D8D112FAB88B200A1AEAB /* Tokenizers */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9F0D8D102FAB88B200A1AEAB /* XCRemoteSwiftPackageReference "swift-transformers" */;
+			productName = Tokenizers;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

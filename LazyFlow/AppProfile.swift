@@ -180,7 +180,7 @@ struct AppProfile: Codable, Identifiable {
     //   setup  = role + hard rules + protected vocabulary
     //   style  = tone rules + formatting options + custom instructions + output instruction
 
-    var resolvedPromptComponents: (setup: String, style: String)? {
+    nonisolated var resolvedPromptComponents: (setup: String, style: String)? {
         guard postProcessingEnabled, tone != .minimal else { return nil }
 
         var setup = """

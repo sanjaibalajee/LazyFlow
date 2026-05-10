@@ -36,13 +36,68 @@ final class AppState {
         }
     }
 
+    // Cloud STT model (Groq)
     var sttModel: String = UserDefaults.standard.string(forKey: "lazyflow_stt_model") ?? "whisper-large-v3" {
         didSet { UserDefaults.standard.set(sttModel, forKey: "lazyflow_stt_model") }
     }
 
+    // Cloud LLM model (Groq)
     var llmModel: String = UserDefaults.standard.string(forKey: "lazyflow_llm_model") ?? "llama-3.3-70b-versatile" {
         didSet { UserDefaults.standard.set(llmModel, forKey: "lazyflow_llm_model") }
     }
+
+    // STT backend
+    var sttBackend: STTBackend = {
+        let raw = UserDefaults.standard.string(forKey: "lazyflow_stt_backend") ?? "cloud"
+        return STTBackend(rawValue: raw) ?? .cloud
+    }() {
+        didSet {
+            UserDefaults.standard.set(sttBackend.rawValue, forKey: "lazyflow_stt_backend")
+            if sttBackend == .cloud {
+                Task { await localSTT.unload(localSTTModel) }
+            }
+        }
+    }
+
+    var localSTTModel: LocalSTTModel = {
+        let raw = UserDefaults.standard.string(forKey: "lazyflow_local_stt_model") ?? LocalSTTModel.parakeetV3.rawValue
+        return LocalSTTModel(rawValue: raw) ?? .parakeetV3
+    }() {
+        didSet { UserDefaults.standard.set(localSTTModel.rawValue, forKey: "lazyflow_local_stt_model") }
+    }
+
+    // LLM backend
+    var llmBackend: LLMBackend = {
+        let raw = UserDefaults.standard.string(forKey: "lazyflow_llm_backend") ?? "cloud"
+        return LLMBackend(rawValue: raw) ?? .cloud
+    }() {
+        didSet {
+            UserDefaults.standard.set(llmBackend.rawValue, forKey: "lazyflow_llm_backend")
+            if llmBackend == .cloud {
+                llmLoadTask?.cancel(); llmLoadTask = nil
+                Task { await localLLM.unload(localLLMModel) }
+                localLLMOpState = .idle
+            }
+        }
+    }
+
+    var localLLMModel: LocalLLMModel = {
+        let raw = UserDefaults.standard.string(forKey: "lazyflow_local_llm_model") ?? LocalLLMModel.qwen3_0_6b.rawValue
+        return LocalLLMModel(rawValue: raw) ?? .qwen3_0_6b
+    }() {
+        didSet { UserDefaults.standard.set(localLLMModel.rawValue, forKey: "lazyflow_local_llm_model") }
+    }
+
+    // MARK: - Local services
+
+    let localSTT = LocalSTTService()
+    let localLLM = LocalLLMService()
+
+    // Observable download/load state — drives Settings UI
+    var localSTTOpState: LocalOpState = .idle
+    var localLLMOpState: LocalOpState = .idle
+
+    private var llmLoadTask: Task<Void, Never>?
 
     // MARK: - Toggle / overlay state
 
@@ -120,9 +175,11 @@ final class AppState {
         audioLevel    = 0
         onRecordingChanged?(false)
 
-        let audioURL  = audioCapture.outputURL
-        let stt       = TranscriptionService(apiKey: apiKey, model: sttModel)
-        let llm       = PostProcessingService(apiKey: apiKey, model: llmModel)
+        let audioURL      = audioCapture.outputURL
+        let cloudSTT      = TranscriptionService(apiKey: apiKey, model: sttModel)
+        let cloudLLM      = PostProcessingService(apiKey: apiKey, model: llmModel)
+        let capturedSTTBackend = sttBackend
+        let capturedLLMBackend = llmBackend
         let targetApp = recordingTargetApp
         // Only create a profile for apps with a real bundle ID — nil-bundle apps
         // (e.g. some system processes) are excluded so they don't share a junk profile.
@@ -186,7 +243,19 @@ final class AppState {
             }
 
             do {
-                let raw = try await stt.transcribe(audioURL: url, vocabularyHint: sttHint)
+                // Route STT: cloud (Groq) or on-device
+                let raw: String
+                switch capturedSTTBackend {
+                case .cloud:
+                    raw = try await cloudSTT.transcribe(audioURL: url, vocabularyHint: sttHint)
+                case .local:
+                    if localSTTOpState.isBusy {
+                        recordingMode = .idle
+                        errorMessage  = "Local STT model is still loading — try again in a moment."
+                        return
+                    }
+                    raw = try await localSTT.transcribe(audioURL: url, vocabularyHint: sttHint)
+                }
 
                 // Strip vocal fillers before corrections and LLM — deterministic, cheap, and
                 // catches cases the LLM might miss. Skipped when keepFillerWords is toggled on.
@@ -204,8 +273,15 @@ final class AppState {
                         // LLM sees the text. LLM-based substitution is unreliable for proper
                         // names — the model capitalises, rephrases, or skips them unpredictably.
                         let preApplied = applyCorrections(defiltered, corrections: corrections)
-                        final = try await llm.process(rawTranscript: preApplied, profile: p,
-                                                      corrections: [])
+                        // Route LLM: cloud (Groq) or on-device (MLX)
+                        switch capturedLLMBackend {
+                        case .cloud:
+                            final = try await cloudLLM.process(rawTranscript: preApplied, profile: p,
+                                                               corrections: [])
+                        case .local:
+                            final = try await localLLM.process(rawTranscript: preApplied, profile: p,
+                                                               corrections: [])
+                        }
                         if !corrections.isEmpty {
                             correctionStore.incrementFrequency(for: corrections.map(\.id))
                         }
@@ -244,6 +320,107 @@ final class AppState {
     }
 
     func clearError() { errorMessage = nil }
+
+    // MARK: - Local model management
+
+    func loadLocalSTT(_ model: LocalSTTModel) {
+        localSTTModel   = model
+        localSTTOpState = .busy(progress: 0, status: "Starting…")
+        Task {
+            do {
+                try await localSTT.load(model) { progress, status in
+                    Task { @MainActor [weak self] in
+                        self?.localSTTOpState = progress < 1.0
+                            ? .busy(progress: progress, status: status)
+                            : .idle
+                    }
+                }
+                Task { @MainActor [weak self] in
+                    self?.localSTTOpState = .idle
+                }
+            } catch {
+                Task { @MainActor [weak self] in
+                    self?.localSTTOpState = .error(error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    func deleteLocalSTT(_ model: LocalSTTModel) {
+        Task {
+            await localSTT.unload(model)
+            LocalSTTService.delete(model)
+        }
+    }
+
+    func loadLocalLLM(_ model: LocalLLMModel) {
+        llmLoadTask?.cancel()
+        localLLMModel   = model
+        localLLMOpState = .busy(progress: 0, status: "Starting…")
+        llmLoadTask = Task {
+            do {
+                try await localLLM.load(model) { progress, status in
+                    Task { @MainActor [weak self] in
+                        self?.localLLMOpState = progress < 1.0
+                            ? .busy(progress: progress, status: status)
+                            : .idle
+                    }
+                }
+                guard !Task.isCancelled else { return }
+                Task { @MainActor [weak self] in
+                    self?.localLLMOpState = .idle
+                }
+            } catch {
+                guard !Task.isCancelled else { return }
+                Task { @MainActor [weak self] in
+                    self?.localLLMOpState = .error(error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    func cancelLocalLLM() {
+        llmLoadTask?.cancel()
+        llmLoadTask = nil
+        Task { await localLLM.unload(localLLMModel) }
+        localLLMOpState = .idle
+    }
+
+    func deleteLocalLLM(_ model: LocalLLMModel) {
+        Task {
+            await localLLM.unload(model)
+            LocalLLMService.delete(model)
+        }
+    }
+
+    // Auto-load previously selected local models on launch — sequential so both
+    // don't spike memory at the same time. STT loads first (faster, needed sooner);
+    // LLM only starts once STT is fully resident.
+    func setupLocalServicesIfNeeded() {
+        let needSTT = sttBackend == .local && LocalSTTService.isDownloaded(localSTTModel)
+        let needLLM = llmBackend == .local && LocalLLMService.isDownloaded(localLLMModel)
+        guard needSTT || needLLM else { return }
+        Task {
+            if needSTT { await loadSTLAsync(localSTTModel) }
+            if needLLM { loadLocalLLM(localLLMModel) }
+        }
+    }
+
+    // Awaitable STT load — used only by setupLocalServicesIfNeeded for sequencing.
+    private func loadSTLAsync(_ model: LocalSTTModel) async {
+        localSTTModel   = model
+        localSTTOpState = .busy(progress: 0, status: "Starting…")
+        do {
+            try await localSTT.load(model) { p, s in
+                Task { @MainActor [weak self] in
+                    self?.localSTTOpState = p < 1 ? .busy(progress: p, status: s) : .idle
+                }
+            }
+            localSTTOpState = .idle
+        } catch {
+            localSTTOpState = .error(error.localizedDescription)
+        }
+    }
 
     // MARK: - Text Injection
 
@@ -396,9 +573,8 @@ struct TranscriptEntry: Codable, Identifiable, FetchableRecord, PersistableRecor
 
     // Used by CorrectionSheet to update the text of an existing entry
     func withText(_ newText: String) -> TranscriptEntry {
-        var copy = self
-        return TranscriptEntry(_id: id, text: newText, date: date,
-                               appName: appName, bundleIdentifier: bundleIdentifier)
+        TranscriptEntry(_id: id, text: newText, date: date,
+                        appName: appName, bundleIdentifier: bundleIdentifier)
     }
 
     private init(_id: String, text: String, date: Date, appName: String?, bundleIdentifier: String?) {
