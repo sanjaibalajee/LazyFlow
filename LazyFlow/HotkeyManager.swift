@@ -16,6 +16,7 @@ final class HotkeyManager {
     var onStopRecording:    (() -> Void)?
     var onCancelRecording:  (() -> Void)?
     var onToggleModeActive: ((Bool) -> Void)?
+    var onAgentMode:        (() -> Void)?      // triple-tap ⌥
 
     // MARK: - State machine
 
@@ -23,16 +24,20 @@ final class HotkeyManager {
         case idle
         case pressed(at: Date)
         case holdRecording
-        case awaitingDoubleTap
+        case awaitingSecondTap      // 1st tap done
+        case secondPressed          // 2nd press is down
+        case awaitingThirdTap       // 2nd tap done — wait to confirm double vs triple
         case toggleRecording
     }
 
     private var state: State = .idle
-    private var holdWorkItem:      DispatchWorkItem?
-    private var doubleTapWorkItem: DispatchWorkItem?
+    private var holdWorkItem:       DispatchWorkItem?
+    private var doubleTapWorkItem:  DispatchWorkItem?
+    private var tripleTapWorkItem:  DispatchWorkItem?
 
-    private static let holdThreshold:   TimeInterval = 0.15
-    private static let doubleTapWindow: TimeInterval = 0.35
+    private static let holdThreshold:    TimeInterval = 0.15
+    private static let doubleTapWindow:  TimeInterval = 0.32
+    private static let tripleTapWindow:  TimeInterval = 0.30
 
     // MARK: - NSEvent monitors
 
@@ -109,21 +114,35 @@ final class HotkeyManager {
 
         case .pressed:
             guard !isDown else { return }
-            // Released before hold threshold → short tap, wait for double-tap
             holdWorkItem?.cancel(); holdWorkItem = nil
-            state = .awaitingDoubleTap
+            state = .awaitingSecondTap
             schedule(&doubleTapWorkItem, after: Self.doubleTapWindow) { [weak self] in
-                guard case .awaitingDoubleTap = self?.state else { return }
+                guard case .awaitingSecondTap = self?.state else { return }
                 self?.state = .idle
             }
 
-        case .awaitingDoubleTap:
+        case .awaitingSecondTap:
             guard isDown else { return }
-            // Second press within window → toggle mode
             doubleTapWorkItem?.cancel(); doubleTapWorkItem = nil
-            state = .toggleRecording
-            onToggleModeActive?(true)
-            onStartRecording?()
+            state = .secondPressed
+
+        case .secondPressed:
+            guard !isDown else { return }
+            state = .awaitingThirdTap
+            schedule(&tripleTapWorkItem, after: Self.tripleTapWindow) { [weak self] in
+                guard case .awaitingThirdTap = self?.state else { return }
+                // Confirmed double-tap → start toggle recording
+                self?.state = .toggleRecording
+                self?.onToggleModeActive?(true)
+                self?.onStartRecording?()
+            }
+
+        case .awaitingThirdTap:
+            guard isDown else { return }
+            // Third tap confirmed → agent mode
+            tripleTapWorkItem?.cancel(); tripleTapWorkItem = nil
+            state = .idle
+            onAgentMode?()
 
         case .holdRecording:
             guard !isDown else { return }
@@ -132,7 +151,6 @@ final class HotkeyManager {
 
         case .toggleRecording:
             guard isDown else { return }
-            // Any press stops toggle recording
             state = .idle
             onToggleModeActive?(false)
             onStopRecording?()
@@ -158,8 +176,9 @@ final class HotkeyManager {
     // MARK: - Helpers
 
     private func cancelTimers() {
-        holdWorkItem?.cancel();      holdWorkItem = nil
+        holdWorkItem?.cancel();      holdWorkItem      = nil
         doubleTapWorkItem?.cancel(); doubleTapWorkItem = nil
+        tripleTapWorkItem?.cancel(); tripleTapWorkItem = nil
     }
 
     private func schedule(_ item: inout DispatchWorkItem?, after delay: TimeInterval, block: @escaping () -> Void) {

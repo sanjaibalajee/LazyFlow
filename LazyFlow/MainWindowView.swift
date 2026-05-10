@@ -1,28 +1,46 @@
 import SwiftUI
 import AppKit
+import Combine
 
 struct MainWindowView: View {
     @Environment(AppState.self) private var appState
     @State private var selection: SidebarItem? = .dashboard
+    @AppStorage("lazyflow_show_monitor") private var showMonitor = false
+    @State private var monitor = SystemMonitor()
 
     var body: some View {
-        NavigationSplitView {
-            List(SidebarItem.allCases, selection: $selection) { item in
-                Label(item.rawValue, systemImage: item.icon)
-                    .tag(item)
+        VStack(spacing: 0) {
+            NavigationSplitView {
+                List(SidebarItem.allCases, selection: $selection) { item in
+                    Label(item.rawValue, systemImage: item.icon)
+                        .tag(item)
+                }
+                .listStyle(.sidebar)
+                .navigationTitle("LazyFlow")
+                .navigationSplitViewColumnWidth(min: 180, ideal: 200)
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    MonitorToggleButton(isOn: $showMonitor)
+                }
+            } detail: {
+                switch selection {
+                case .dashboard, nil: DashboardView()
+                case .history:        HistoryView()
+                case .profiles:       ProfilesListView()
+                case .knowledgeBase:  KnowledgeBaseView()
+                }
             }
-            .listStyle(.sidebar)
-            .navigationTitle("LazyFlow")
-            .navigationSplitViewColumnWidth(min: 180, ideal: 200)
-        } detail: {
-            switch selection {
-            case .dashboard, nil: DashboardView()
-            case .history:        HistoryView()
-            case .profiles:       ProfilesListView()
-            case .knowledgeBase:  KnowledgeBaseView()
+            .navigationSplitViewStyle(.balanced)
+
+            if showMonitor {
+                SystemMonitorPanel()
+                    .environment(monitor)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .navigationSplitViewStyle(.balanced)
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showMonitor)
+        .environment(monitor)
+        .onAppear { monitor.start() }
+        .onDisappear { monitor.stop() }
     }
 }
 
@@ -74,6 +92,9 @@ struct DashboardView: View {
                     StatCard(icon: "textformat",  color: .orange,
                              value: "\(totalWords)",        label: "Words")
                 }
+
+                // Inference status
+                InferenceStatusCard()
 
                 // Recent
                 if appState.history.isEmpty {
@@ -139,6 +160,135 @@ struct DashboardView: View {
         appState.history.reduce(0) { $0 + $1.text.split(separator: " ").count }
     }
 }
+
+// MARK: - Monitor Toggle Button
+
+private struct MonitorToggleButton: View {
+    @Binding var isOn: Bool
+
+    var body: some View {
+        Button {
+            isOn.toggle()
+        } label: {
+            HStack(spacing: 7) {
+                Image(systemName: isOn ? "chart.bar.fill" : "chart.bar")
+                    .font(.system(size: 12))
+                    .foregroundStyle(isOn ? Color.accentColor : .secondary)
+                Text("Monitor")
+                    .font(.system(size: 13))
+                    .foregroundStyle(isOn ? Color.accentColor : .secondary)
+                Spacer()
+                if isOn {
+                    Circle()
+                        .fill(.green)
+                        .frame(width: 6, height: 6)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(.background)
+        .overlay(alignment: .top) { Divider() }
+    }
+}
+
+// MARK: - Inference Status Card
+
+struct InferenceStatusCard: View {
+    @Environment(AppState.self) private var appState
+    @Environment(\.openSettings) private var openSettings
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Inference", systemImage: "cpu").font(.headline)
+                Spacer()
+                Button { openSettings() } label: {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Open Settings")
+            }
+
+            HStack(spacing: 0) {
+                modelRow(icon: "waveform",
+                         label: "STT",
+                         backend: appState.sttBackend == .cloud ? nil
+                             : LocalSTTService.isDownloaded(appState.localSTTModel) && appState.localSTTOpState == .idle
+                                 ? appState.localSTTModel.displayName : nil,
+                         cloudLabel: appState.sttModel.replacingOccurrences(of: "whisper-", with: ""),
+                         isCloud: appState.sttBackend == .cloud,
+                         opState: appState.localSTTOpState,
+                         onDownload: { appState.loadLocalSTT(appState.localSTTModel) })
+
+                Divider().frame(height: 32).padding(.horizontal, 12)
+
+                modelRow(icon: "sparkles",
+                         label: "LLM",
+                         backend: appState.llmBackend == .cloud ? nil
+                             : LocalLLMService.isDownloaded(appState.localLLMModel) && appState.localLLMOpState == .idle
+                                 ? appState.localLLMModel.displayName : nil,
+                         cloudLabel: String(appState.llmModel.split(separator: "-").prefix(3).joined(separator: "-")),
+                         isCloud: appState.llmBackend == .cloud,
+                         opState: appState.localLLMOpState,
+                         onDownload: { appState.loadLocalLLM(appState.localLLMModel) })
+            }
+        }
+        .padding(16)
+        .background(.background, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(.separator, lineWidth: 0.5))
+    }
+
+    @ViewBuilder
+    private func modelRow(icon: String, label: String, backend: String?,
+                          cloudLabel: String, isCloud: Bool,
+                          opState: LocalOpState,
+                          onDownload: @escaping () -> Void) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .frame(width: 16)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+                    .textCase(.uppercase)
+
+                if isCloud {
+                    Text(cloudLabel).font(.system(size: 12)).foregroundStyle(.secondary)
+                } else if case .busy(let p, let s) = opState {
+                    VStack(alignment: .leading, spacing: 2) {
+                        ProgressView(value: p).tint(.accentColor).frame(width: 80)
+                        Text(s).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                } else if let name = backend, opState == .idle {
+                    HStack(spacing: 4) {
+                        Circle().fill(.green).frame(width: 6, height: 6)
+                        Text(name).font(.system(size: 12))
+                    }
+                } else {
+                    Button("Download") { onDownload() }
+                        .buttonStyle(.bordered).controlSize(.mini)
+                }
+            }
+
+            if isCloud {
+                Image(systemName: "cloud")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// MARK: - Stat Card
 
 struct StatCard: View {
     let icon:  String
@@ -269,19 +419,91 @@ struct HistoryView: View {
     }
 }
 
-// MARK: - Knowledge Base placeholder
+// MARK: - Knowledge Base
 
 struct KnowledgeBaseView: View {
+    @Environment(AppState.self) private var appState
+
+    @State private var drafts: [KBField: String] = [:]
+
+    private var store: KnowledgeStore { appState.knowledgeStore }
+
     var body: some View {
-        ContentUnavailableView(
-            "Knowledge Base",
-            systemImage: "brain",
-            description: Text(
-                "Store personal facts — your name, address, job title, preferred phrases — " +
-                "so LazyFlow can fill forms and draft text using your real information " +
-                "instead of placeholders. Coming in a future update."
-            )
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Label("Smart Fill Profile", systemImage: "person.text.rectangle")
+                    .font(.headline)
+                Text("Stored locally. Injected into every LLM call so the AI can fill fields and personalise output using your real information.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+
+            Divider().padding(.horizontal, 20)
+
+            VStack(spacing: 0) {
+                ForEach(KBField.allCases, id: \.rawValue) { field in
+                    fieldRow(field)
+                    if field != KBField.allCases.last {
+                        Divider().padding(.leading, 52)
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+
+            if store.contextBlock == nil {
+                HStack(spacing: 6) {
+                    Image(systemName: "info.circle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("Fill in at least one field to activate Smart Fill.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 4)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .onAppear { syncDrafts() }
+    }
+
+    @ViewBuilder
+    private func fieldRow(_ field: KBField) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: field.icon)
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+                .frame(width: 20, alignment: .center)
+
+            Text(field.displayName)
+                .font(.system(size: 13))
+                .foregroundStyle(.primary)
+                .frame(width: 88, alignment: .leading)
+
+            TextField(field.placeholder, text: binding(for: field))
+                .font(.system(size: 13))
+                .textFieldStyle(.plain)
+                .onChange(of: drafts[field] ?? "") { _, newValue in
+                    store.set(field: field, value: newValue)
+                }
+        }
+        .padding(.vertical, 9)
+    }
+
+    private func binding(for field: KBField) -> Binding<String> {
+        Binding(
+            get: { drafts[field] ?? "" },
+            set: { drafts[field] = $0 }
         )
+    }
+
+    private func syncDrafts() {
+        for field in KBField.allCases {
+            drafts[field] = store.value(for: field)
+        }
     }
 }
 

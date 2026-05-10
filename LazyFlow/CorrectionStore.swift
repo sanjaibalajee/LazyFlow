@@ -100,7 +100,7 @@ final class CorrectionStore {
                     .fetchAll(db)
             } else {
                 return try CorrectionEntry
-                    .filter(Column("bundleIdentifier") == nil)
+                    .filter(Column("bundleIdentifier") == nil) 
                     .order(Column("frequency").desc)
                     .fetchAll(db)
             }
