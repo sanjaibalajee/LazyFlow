@@ -8,9 +8,20 @@ final class AppState {
 
     // MARK: - Recording
 
-    var isRecording    = false
-    var recordingMode: RecordingMode = .idle
-    var audioLevel:    Float = 0
+    /// Single source of truth for where we are in the capture → transcribe → paste pipeline.
+    /// Every transition notifies `onRecordingModeChanged` so the floating overlay stays in
+    /// sync even for the transitions that happen deep inside the processing task.
+    var recordingMode: RecordingMode = .idle {
+        didSet {
+            guard oldValue != recordingMode else { return }
+            onRecordingModeChanged?(recordingMode)
+        }
+    }
+
+    /// Derived rather than stored — the two used to be updated side by side and could drift.
+    var isRecording: Bool { recordingMode == .recording }
+
+    var audioLevel: Float = 0
 
     enum RecordingMode { case idle, recording, processing }
 
@@ -19,6 +30,11 @@ final class AppState {
     var liveTranscript    = ""
     var currentTranscript = ""
     var errorMessage:     String?
+
+    /// Set to request the correction sheet for an entry. The main window owns the sheet, so
+    /// the menu bar can hand off a transcript to it — sheets cannot be presented from inside
+    /// a `MenuBarExtra` popover, which dismisses itself as soon as the sheet takes focus.
+    var pendingCorrection: TranscriptEntry?
 
     // MARK: - History (backed by TranscriptStore → GRDB)
 
@@ -41,15 +57,71 @@ final class AppState {
         }
     }
 
+    /// Groq key used for cloud Whisper. Prefers the per-provider Keychain entry that Settings
+    /// writes and falls back to the legacy single-key entry from onboarding/older builds.
+    /// Reading only the legacy entry meant a key added in Settings → Providers never reached
+    /// transcription, which failed as "no API key" while the UI showed a key was configured.
+    var groqAPIKey: String {
+        let stored = providerStore.apiKey(for: .groq)
+        return stored.isEmpty ? apiKey : stored
+    }
+
     // Cloud STT model (Groq Whisper only)
     var sttModel: String = UserDefaults.standard.string(forKey: "lazyflow_stt_model") ?? "whisper-large-v3" {
         didSet { UserDefaults.standard.set(sttModel, forKey: "lazyflow_stt_model") }
+    }
+
+    var dictationLanguage: DictationLanguage = {
+        let raw = UserDefaults.standard.string(forKey: "lf_dictation_language") ?? "automatic"
+        return DictationLanguage(rawValue: raw) ?? .automatic
+    }() {
+        didSet { UserDefaults.standard.set(dictationLanguage.rawValue, forKey: "lf_dictation_language") }
     }
 
     // Cloud LLM — forwarded through provider store for UI compatibility
     var llmModel: String {
         get { providerStore.dictationModel }
         set { providerStore.dictationModel = newValue }
+    }
+
+    // How cleaned text is inserted at the cursor (clipboard paste vs direct typing)
+    var insertionMode: InsertionMode = {
+        InsertionMode(rawValue: UserDefaults.standard.string(forKey: "lf_insertion_mode") ?? "") ?? .clipboardPaste
+    }() {
+        didSet { UserDefaults.standard.set(insertionMode.rawValue, forKey: "lf_insertion_mode") }
+    }
+
+    // Live on-device transcription preview in the recording overlay. Opt-in and experimental:
+    // it runs a separate Apple recognizer alongside the recorder and never affects the final
+    // transcript. Off by default so it can't touch the core dictation path.
+    var liveTranscriptPreviewEnabled: Bool = UserDefaults.standard.bool(forKey: "lf_live_preview") {
+        didSet { UserDefaults.standard.set(liveTranscriptPreviewEnabled, forKey: "lf_live_preview") }
+    }
+
+    var pressEnterCommandEnabled: Bool = {
+        UserDefaults.standard.object(forKey: "lf_press_enter_enabled") as? Bool ?? true
+    }() {
+        didSet { UserDefaults.standard.set(pressEnterCommandEnabled, forKey: "lf_press_enter_enabled") }
+    }
+
+    // Show a Dock icon. Off by default — LazyFlow is a menu-bar utility; the menu bar icon
+    // and the "Open LazyFlow" command keep the app fully reachable without a Dock presence.
+    var showDockIcon: Bool = UserDefaults.standard.object(forKey: "lf_show_dock_icon") as? Bool ?? false {
+        didSet {
+            UserDefaults.standard.set(showDockIcon, forKey: "lf_show_dock_icon")
+            AppState.applyActivationPolicy(showDockIcon: showDockIcon)
+        }
+    }
+
+    /// Applies the Dock-icon preference. `.regular` shows a Dock icon; `.accessory` hides it
+    /// (menu-bar-only). Must run on the main thread.
+    static func applyActivationPolicy(showDockIcon: Bool) {
+        let policy: NSApplication.ActivationPolicy = showDockIcon ? .regular : .accessory
+        if Thread.isMainThread {
+            NSApp.setActivationPolicy(policy)
+        } else {
+            DispatchQueue.main.async { NSApp.setActivationPolicy(policy) }
+        }
     }
 
     // STT backend
@@ -112,30 +184,22 @@ final class AppState {
 
     // MARK: - Callbacks (used by AppDelegate for non-SwiftUI observers)
 
-    var onRecordingChanged:   ((Bool) -> Void)?
-    var onRecordingCancelled: (() -> Void)?  // notifies HotkeyManager to reset its state
+    var onRecordingModeChanged: ((RecordingMode) -> Void)?
+    var onRecordingCancelled:   (() -> Void)?  // notifies HotkeyManager to reset its state
 
     // MARK: - Profiles
 
     let profileStore = AppProfileStore()
+    let snippetStore = SnippetStore()
 
     // MARK: - Knowledge Base
 
     let knowledgeStore = KnowledgeStore.shared
 
-    // MARK: - Goal recording (STT-only, no LLM — used by Computer Use goal input)
-
-    private(set) var goalRecordingMode = false
-    var onGoalTranscribed: ((String) -> Void)?
-
-    func startGoalRecording() {
-        goalRecordingMode = true
-        startRecording()
-    }
-
     // MARK: - Private state
 
     private let audioCapture = AudioCapture()
+    private let speechPreview = SpeechPreviewService()
 
     // Target app captured at recording START so paste always goes to the right place
     private var recordingTargetApp: NSRunningApplication?
@@ -175,18 +239,24 @@ final class AppState {
         // Capture the frontmost app NOW — before any async work
         recordingTargetApp  = NSWorkspace.shared.frontmostApplication
         targetAppName       = recordingTargetApp?.localizedName
-        // Capture the focused field now so context is correct even if focus changes during recording
-        recordingFocusContext = recordingTargetApp.flatMap { FocusContextService.capture(for: $0) }
+        recordingFocusContext = nil
 
         audioCapture.onLevelUpdate = { [weak self] level in
             Task { @MainActor [weak self] in self?.audioLevel = level }
         }
 
         do {
+            // Start capturing audio before querying Accessibility. AX calls can occasionally
+            // stall; they must never delay the microphone and clip the first spoken syllable.
             try audioCapture.start()
-            isRecording   = true
             recordingMode = .recording
-            onRecordingChanged?(true)
+            recordingFocusContext = recordingTargetApp.flatMap { FocusContextService.capture(for: $0) }
+
+            // Best-effort live preview (opt-in). Never blocks or affects the real recording.
+            if liveTranscriptPreviewEnabled {
+                speechPreview.onPartial = { [weak self] text in self?.liveTranscript = text }
+                speechPreview.start()
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -194,20 +264,29 @@ final class AppState {
 
     func stopRecording() {
         guard recordingMode == .recording else { return }
+        let releasedAt = Date()
         audioCapture.stop()
-        isRecording   = false
+        let recorderFinalizationTime = Date().timeIntervalSince(releasedAt)
+        speechPreview.stop()
         recordingMode = .processing
         audioLevel    = 0
-        onRecordingChanged?(false)
 
         let audioURL      = audioCapture.outputURL
-        let cloudSTT      = TranscriptionService(apiKey: apiKey, model: sttModel)
-        let dictCfg       = providerStore.config(for: .dictation)
-        let cloudLLM      = PostProcessingService(
-            apiKey:  dictCfg.apiKey.isEmpty  ? apiKey  : dictCfg.apiKey,
-            baseURL: dictCfg.baseURL.isEmpty ? "https://api.groq.com/openai/v1" : dictCfg.baseURL,
-            model:   dictCfg.model.isEmpty   ? llmModel : dictCfg.model
+        let groqKey       = groqAPIKey
+        let cloudSTT      = TranscriptionService(
+            apiKey: groqKey,
+            model: sttModel,
+            language: dictationLanguage.apiCode
         )
+        let dictCfg       = providerStore.dictationConfig
+        // Fall back to the legacy single Groq key when the provider store has no key yet.
+        let effectiveCfg: LLMConfig = dictCfg.apiKey.isEmpty
+            ? LLMConfig(provider: .groq,
+                        baseURL:  LLMProvider.groq.defaultBaseURL,
+                        apiKey:   groqKey,
+                        model:    LLMProvider.groq.defaultModel)
+            : dictCfg
+        let cloudLLM      = PostProcessingService(config: effectiveCfg)
         let capturedSTTBackend = sttBackend
         let capturedLLMBackend = llmBackend
         let targetApp    = recordingTargetApp
@@ -222,8 +301,6 @@ final class AppState {
                 displayName: app.localizedName ?? bundleID
             )
         }
-
-        let startedAt = Date()
 
         let duration = audioCapture.recordingDuration
 
@@ -265,6 +342,7 @@ final class AppState {
         Task {
             defer { audioCapture.cleanup() }
             guard let url = audioURL else { recordingMode = .idle; return }
+            let preparationTime = Date().timeIntervalSince(releasedAt) - recorderFinalizationTime
 
             // Skip transcription for very short recordings — Whisper hallucinates
             // multilingual text on near-silence when given < ~0.8s of audio
@@ -276,6 +354,7 @@ final class AppState {
 
             do {
                 // Route STT: cloud (Groq) or on-device
+                let sttStartedAt = Date()
                 let raw: String
                 switch capturedSTTBackend {
                 case .cloud:
@@ -288,17 +367,7 @@ final class AppState {
                     }
                     raw = try await localSTT.transcribe(audioURL: url, vocabularyHint: sttHint)
                 }
-
-                // Goal recording: deliver raw transcript directly, skip all LLM processing
-                if goalRecordingMode {
-                    goalRecordingMode = false
-                    let goal = FillerWordFilter.filter(raw)
-                    Task { @MainActor [weak self] in
-                        self?.recordingMode = .idle
-                        self?.onGoalTranscribed?(goal)
-                    }
-                    return
-                }
+                let sttTime = Date().timeIntervalSince(sttStartedAt)
 
                 // Strip vocal fillers before corrections and LLM — deterministic, cheap, and
                 // catches cases the LLM might miss. Skipped when keepFillerWords is toggled on.
@@ -307,6 +376,7 @@ final class AppState {
 
                 // Post-processing is best-effort — STT result is never lost if LLM fails
                 var final = defiltered
+                var cleanupTime: TimeInterval = 0
                 if let p = profile {
                     do {
                         let corrections = correctionStore.relevantCorrections(
@@ -316,6 +386,7 @@ final class AppState {
                         // LLM sees the text. LLM-based substitution is unreliable for proper
                         // names — the model capitalises, rephrases, or skips them unpredictably.
                         let preApplied = applyCorrections(defiltered, corrections: corrections)
+                        let cleanupStartedAt = Date()
                         // Route LLM: cloud (Groq) or on-device (MLX)
                         switch capturedLLMBackend {
                         case .cloud:
@@ -333,6 +404,16 @@ final class AppState {
                                 kbContext: capturedKB,
                                 focusContext: capturedFocus)
                         }
+                        cleanupTime = Date().timeIntervalSince(cleanupStartedAt)
+                        let customAllowsTitleCase = p.customInstructions
+                            .localizedCaseInsensitiveContains("title case")
+                        final = OutputCapitalization.sanitize(
+                            final,
+                            reference: preApplied,
+                            forceLowercase: p.formattingOptions.lowercase,
+                            allowTitleCase: customAllowsTitleCase || capturedFocus?.allowsTitleCase == true,
+                            protectedTerms: p.vocabulary + corrections.map(\.correct)
+                        )
                         if !corrections.isEmpty {
                             correctionStore.incrementFrequency(for: corrections.map(\.id))
                         }
@@ -342,13 +423,29 @@ final class AppState {
                     }
                 }
 
-                let elapsed = Date().timeIntervalSince(startedAt)
+                let command = DictationCommands.prepare(
+                    final,
+                    pressEnterEnabled: pressEnterCommandEnabled
+                )
+                final = command.text
+                if profile?.formattingOptions.omitTrailingPeriod == true {
+                    final = DictationCommands.removeTrailingPeriod(from: final)
+                }
+                final = snippetStore.expand(in: final)
+
+                let readyTime = Date().timeIntervalSince(releasedAt)
                 let tone    = profile?.tone.displayName ?? "none"
-                print("[LazyFlow] ✅ \(String(format: "%.2fs", elapsed)) | \(targetApp?.localizedName ?? "?") [\(tone)]")
-                finishProcessing(transcript: final,
-                                 appName: targetApp?.localizedName,
-                                 bundleIdentifier: targetApp?.bundleIdentifier)
-                pasteAtCursor(final, targetApp: targetApp)
+                print("[LazyFlow] ✅ \(String(format: "%.2fs", readyTime)) | \(targetApp?.localizedName ?? "?") [\(tone)]")
+                print("[LazyFlow] ⏱ finalize=\(Self.milliseconds(recorderFinalizationTime))ms prep=\(Self.milliseconds(preparationTime))ms stt=\(Self.milliseconds(sttTime))ms cleanup=\(Self.milliseconds(cleanupTime))ms ready=\(Self.milliseconds(readyTime))ms")
+
+                // Return to idle and hide the overlay before restoring focus and inserting text.
+                // Changing window state after posting ⌘V can disrupt delivery in some apps.
+                finishProcessing(
+                    transcript: final,
+                    appName: targetApp?.localizedName,
+                    bundleIdentifier: targetApp?.bundleIdentifier
+                )
+                pasteAtCursor(final, targetApp: targetApp, pressEnter: command.pressEnter)
             } catch {
                 print("[LazyFlow] ❌ \(error.localizedDescription)")
                 errorMessage  = error.localizedDescription
@@ -359,15 +456,14 @@ final class AppState {
 
     func cancelRecording() {
         audioCapture.stop()
+        speechPreview.stop()
         audioCapture.cleanup()
-        isRecording           = false
         recordingMode         = .idle
         audioLevel            = 0
         isToggleMode          = false
         targetAppName         = nil
         recordingFocusContext = nil
         liveTranscript        = ""
-        onRecordingChanged?(false)
         onRecordingCancelled?()
     }
 
@@ -476,40 +572,17 @@ final class AppState {
 
     // MARK: - Text Injection
 
-    private func pasteAtCursor(_ text: String, targetApp: NSRunningApplication?) {
-        let pb = NSPasteboard.general
-
-        // Preserve ALL clipboard types, not just plain string
-        let saved = ClipboardSnapshot(pb)
-
-        pb.clearContents()
-        pb.setString(text, forType: .string)
-        let changeCountAfterWrite = pb.changeCount
-
-        // Re-activate the app that was frontmost when recording started
-        let activate: () -> Void = {
-            targetApp?.activate()
-        }
-        let paste: () -> Void = {
-            let src   = CGEventSource(stateID: .hidSystemState)
-            let down  = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: true)
-            let up    = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: false)
-            down?.flags = .maskCommand
-            up?.flags   = .maskCommand
-            down?.post(tap: .cghidEventTap)
-            up?.post(tap: .cghidEventTap)
-        }
-
-        activate()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
-            paste()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                // Only restore if nothing else has written to the clipboard since we did —
-                // if changeCount changed, the user copied something new and we leave it alone.
-                guard pb.changeCount == changeCountAfterWrite else { return }
-                saved.restore(to: pb)
-            }
-        }
+    private func pasteAtCursor(
+        _ text: String,
+        targetApp: NSRunningApplication?,
+        pressEnter: Bool
+    ) {
+        TextInjector.insert(
+            text,
+            into: targetApp,
+            mode: insertionMode,
+            pressEnter: pressEnter
+        )
     }
 
     // MARK: - Helpers
@@ -544,6 +617,10 @@ final class AppState {
         let entry = TranscriptEntry(text: transcript, appName: appName, bundleIdentifier: bundleIdentifier)
         transcriptStore.insert(entry)
     }
+
+    private static func milliseconds(_ interval: TimeInterval) -> Int {
+        Int((max(0, interval) * 1000).rounded())
+    }
 }
 
 // MARK: - Filler Word Filter
@@ -569,36 +646,6 @@ private enum FillerWordFilter {
             result = first.uppercased() + result.dropFirst()
         }
         return result
-    }
-}
-
-// MARK: - Full clipboard preservation
-
-private struct ClipboardSnapshot {
-    private struct Item {
-        let types: [NSPasteboard.PasteboardType]
-        let data:  [NSPasteboard.PasteboardType: Data]
-    }
-    private let items: [Item]
-
-    init(_ pb: NSPasteboard) {
-        items = (pb.pasteboardItems ?? []).map { raw in
-            var data: [NSPasteboard.PasteboardType: Data] = [:]
-            for type in raw.types { data[type] = raw.data(forType: type) }
-            return Item(types: raw.types, data: data)
-        }
-    }
-
-    func restore(to pb: NSPasteboard) {
-        pb.clearContents()
-        let restored: [NSPasteboardItem] = items.map { saved in
-            let item = NSPasteboardItem()
-            for type in saved.types {
-                if let d = saved.data[type] { item.setData(d, forType: type) }
-            }
-            return item
-        }
-        pb.writeObjects(restored)
     }
 }
 

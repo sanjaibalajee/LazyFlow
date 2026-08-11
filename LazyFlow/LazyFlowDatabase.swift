@@ -25,7 +25,14 @@ final class LazyFlowDatabase {
             print("[LazyFlow] DB open failed (\(error)) — moving aside and starting fresh")
             let aside = url.deletingPathExtension().appendingPathExtension("db.bak")
             try? fm.moveItem(at: url, to: aside)
-            writer = try! DatabasePool(path: url.path) // fresh file, guaranteed to succeed
+            do {
+                writer = try DatabasePool(path: url.path)
+            } catch {
+                // Last resort (disk full, no write permission): keep the app usable with an
+                // in-memory store rather than crashing. History won't persist this session.
+                print("[LazyFlow] DB still unavailable (\(error)) — using an in-memory store")
+                writer = try! DatabaseQueue() // in-memory, no disk I/O — cannot realistically fail
+            }
         }
 
         // Migration failure is logged but non-fatal — existing rows remain accessible.
