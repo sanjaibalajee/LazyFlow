@@ -4,33 +4,37 @@ import Combine
 
 struct MainWindowView: View {
     @Environment(AppState.self) private var appState
-    @State private var selection: SidebarItem? = .dashboard
+    @State private var selection: SidebarItem? = .activity
     @AppStorage("lazyflow_show_monitor") private var showMonitor = false
     @State private var monitor = SystemMonitor()
 
     var body: some View {
-        VStack(spacing: 0) {
-            NavigationSplitView {
-                List(SidebarItem.allCases, selection: $selection) { item in
-                    Label(item.rawValue, systemImage: item.icon)
-                        .tag(item)
-                }
-                .listStyle(.sidebar)
-                .navigationTitle("LazyFlow")
-                .navigationSplitViewColumnWidth(min: 180, ideal: 200)
-                .safeAreaInset(edge: .bottom, spacing: 0) {
-                    MonitorToggleButton(isOn: $showMonitor)
-                }
-            } detail: {
-                switch selection {
-                case .dashboard, nil: DashboardView()
-                case .history:        HistoryView()
-                case .profiles:       ProfilesListView()
-                case .knowledgeBase:  KnowledgeBaseView()
-                }
-            }
-            .navigationSplitViewStyle(.balanced)
+        @Bindable var appState = appState
 
+        NavigationSplitView {
+            List(SidebarItem.allCases, selection: $selection) { item in
+                Label(item.rawValue, systemImage: item.icon)
+                    .tag(item)
+            }
+            .listStyle(.sidebar)
+            .navigationTitle("LazyFlow")
+            .navigationSplitViewColumnWidth(min: 190, ideal: 210)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                MonitorToggleButton(isOn: $showMonitor)
+            }
+        } detail: {
+            switch selection {
+            case .activity, nil:  ActivityView()
+            case .profiles:       ProfilesListView()
+            case .snippets:       SnippetsView()
+            case .knowledgeBase:  KnowledgeBaseView()
+            }
+        }
+        .navigationSplitViewStyle(.balanced)
+        // The monitor is a safe-area inset rather than a sibling in a VStack. Wrapping the
+        // split view in a stack detached it from the window chrome, and detail content then
+        // scrolled up underneath the title bar instead of starting below it.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             if showMonitor {
                 SystemMonitorPanel()
                     .environment(monitor)
@@ -39,98 +43,247 @@ struct MainWindowView: View {
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showMonitor)
         .environment(monitor)
-        .onAppear { monitor.start() }
+        // The monitor polls IOKit and mach counters every 2s. It used to run for as long as
+        // the window was open; now it only samples while the panel is actually visible.
+        .task(id: showMonitor) {
+            if showMonitor { monitor.start() } else { monitor.stop() }
+        }
         .onDisappear { monitor.stop() }
+        // Owned here rather than per-row so the menu bar can request a correction too.
+        .sheet(item: $appState.pendingCorrection) { entry in
+            CorrectionSheet(entry: entry,
+                            correctionStore: appState.correctionStore,
+                            transcriptStore: appState.transcriptStore)
+        }
     }
 }
 
 // MARK: - Sidebar
 
 enum SidebarItem: String, CaseIterable, Identifiable, Hashable {
-    case dashboard     = "Dashboard"
-    case history       = "History"
+    case activity      = "Activity"
     case profiles      = "App Profiles"
+    case snippets      = "Voice Snippets"
     case knowledgeBase = "Knowledge Base"
 
     var id: String { rawValue }
 
     var icon: String {
         switch self {
-        case .dashboard:     return "square.grid.2x2"
-        case .history:       return "clock"
+        case .activity:      return "square.stack.3d.up"
         case .profiles:      return "app.badge"
+        case .snippets:      return "text.badge.plus"
         case .knowledgeBase: return "brain"
         }
     }
 }
 
-// MARK: - Dashboard
+// MARK: - Activity
 
-struct DashboardView: View {
+struct ActivityView: View {
     @Environment(AppState.self) private var appState
+    @State private var searchText   = ""
+    @State private var appFilter:   String?  // bundle identifier, nil = all apps
+    @State private var showClearConfirm = false
 
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
-
-                // Greeting
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(greeting)
-                        .font(.largeTitle).bold()
-                    Text("Here's what you've been dictating.")
-                        .foregroundStyle(.secondary)
-                }
-
-                // Stats
-                HStack(spacing: 12) {
-                    StatCard(icon: "mic.fill",    color: .blue,
-                             value: "\(todayCount)",        label: "Today")
-                    StatCard(icon: "calendar",    color: .purple,
-                             value: "\(weekCount)",         label: "This week")
-                    StatCard(icon: "doc.text",    color: .green,
-                             value: "\(appState.history.count)", label: "All time")
-                    StatCard(icon: "textformat",  color: .orange,
-                             value: "\(totalWords)",        label: "Words")
-                }
-
-                // Inference status
-                InferenceStatusCard()
-
-                // Recent
-                if appState.history.isEmpty {
-                    emptyState
-                } else {
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text("Recent").font(.headline)
-                            Spacer()
-                        }
-                        VStack(spacing: 0) {
-                            ForEach(appState.history.prefix(8)) { entry in
-                                TranscriptRow(entry: entry)
-                                if entry.id != appState.history.prefix(8).last?.id {
-                                    Divider().padding(.leading, 44)
-                                }
-                            }
-                        }
-                        .background(.background, in: RoundedRectangle(cornerRadius: 10))
-                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(.separator, lineWidth: 0.5))
-                    }
-                }
-            }
-            .padding(24)
+    private var items: [TranscriptEntry] {
+        appState.history.filter { entry in
+            if let appFilter, entry.bundleIdentifier != appFilter { return false }
+            guard !searchText.isEmpty else { return true }
+            return entry.text.localizedCaseInsensitiveContains(searchText)
+                || (entry.appName?.localizedCaseInsensitiveContains(searchText) ?? false)
         }
     }
 
+    private var grouped: [(key: String, items: [TranscriptEntry])] {
+        ActivityView.group(items)
+    }
+
+    /// Distinct apps present in history, for the filter menu.
+    private var knownApps: [(id: String, name: String)] {
+        var seen = Set<String>()
+        return appState.history.compactMap { entry -> (id: String, name: String)? in
+            guard let id = entry.bundleIdentifier, seen.insert(id).inserted else { return nil }
+            return (id: id, name: entry.appName ?? id)
+        }
+        .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                header
+                if let error = appState.errorMessage {
+                    ErrorBanner(message: error) { appState.clearError() }
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+                statsRow
+                InferenceStatusCard()
+                feedSection
+            }
+            .padding(24)
+        }
+        .confirmationDialog("Delete all transcripts?", isPresented: $showClearConfirm) {
+            Button("Delete All", role: .destructive) { appState.transcriptStore.deleteAll() }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("This removes every transcript from your local history. It can't be undone.")
+        }
+    }
+
+    // ── Header ────────────────────────────────────────────────────────────
+
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(greeting)
+                    .font(.largeTitle).bold()
+                Text(subtitle)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            if !appState.history.isEmpty {
+                Menu {
+                    Button("Delete All Transcripts…", role: .destructive) {
+                        showClearConfirm = true
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.system(size: 15))
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+            }
+        }
+    }
+
+    private var subtitle: String {
+        let stats = self.stats
+        guard stats.total > 0 else {
+            return "Everything you dictate will show up here."
+        }
+        return stats.today > 0
+            ? "\(stats.today) transcript\(stats.today == 1 ? "" : "s") today · \(stats.words.formatted()) words all time."
+            : "Everything you've dictated, searchable in one place."
+    }
+
+    // ── Stats ─────────────────────────────────────────────────────────────
+
+    private var statsRow: some View {
+        let stats = self.stats
+        return HStack(spacing: 12) {
+            StatCard(icon: "mic.fill",   color: .blue,
+                     value: "\(stats.today)",           label: "Today")
+            StatCard(icon: "calendar",   color: .purple,
+                     value: "\(stats.week)",            label: "This week")
+            StatCard(icon: "doc.text",   color: .green,
+                     value: "\(stats.total)",           label: "Transcripts")
+            StatCard(icon: "textformat", color: .orange,
+                     value: stats.words.formatted(),    label: "Words")
+        }
+    }
+
+    // ── Feed ──────────────────────────────────────────────────────────────
+
+    private var feedSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                Text("Transcripts")
+                    .font(.headline)
+
+                if items.count != appState.history.count {
+                    Text("\(items.count)")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(.quaternary.opacity(0.6), in: Capsule())
+                }
+
+                Spacer()
+
+                if !knownApps.isEmpty {
+                    appFilterMenu
+                }
+
+                SearchField(text: $searchText)
+                    .frame(maxWidth: 200)
+            }
+
+            if appState.history.isEmpty {
+                emptyState
+            } else if items.isEmpty {
+                noResults
+            } else {
+                LazyVStack(alignment: .leading, spacing: 18) {
+                    ForEach(grouped, id: \.key) { group in
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 6) {
+                                Text(group.key)
+                                    .font(.subheadline).bold()
+                                    .foregroundStyle(.secondary)
+                                Text("\(group.items.count)")
+                                    .font(.caption.monospacedDigit())
+                                    .foregroundStyle(.tertiary)
+                            }
+                            VStack(spacing: 0) {
+                                ForEach(Array(group.items.enumerated()), id: \.element.id) { index, entry in
+                                    if index != 0 {
+                                        Divider().padding(.leading, 46)
+                                    }
+                                    TranscriptRow(entry: entry)
+                                        .padding(.horizontal, 12)
+                                }
+                            }
+                            .background(.background, in: RoundedRectangle(cornerRadius: 12))
+                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(.separator, lineWidth: 0.5))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var appFilterMenu: some View {
+        Menu {
+            Button {
+                appFilter = nil
+            } label: {
+                if appFilter == nil { Label("All Apps", systemImage: "checkmark") }
+                else                { Text("All Apps") }
+            }
+            Divider()
+            ForEach(knownApps, id: \.id) { app in
+                Button {
+                    appFilter = app.id
+                } label: {
+                    if appFilter == app.id { Label(app.name, systemImage: "checkmark") }
+                    else                   { Text(app.name) }
+                }
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "line.3.horizontal.decrease.circle")
+                    .font(.system(size: 12))
+                Text(appFilter.flatMap { id in knownApps.first { $0.id == id }?.name } ?? "All Apps")
+                    .font(.system(size: 12))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(appFilter == nil ? Color.secondary : Color.accentColor)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+    }
+
     private var emptyState: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "mic.circle")
-                .font(.system(size: 48))
+        VStack(spacing: 14) {
+            Image(systemName: "waveform")
+                .font(.system(size: 44))
                 .foregroundStyle(.tertiary)
             Text("No transcripts yet")
                 .font(.headline)
                 .foregroundStyle(.secondary)
-            Text("Hold Right ⌥ anywhere to start dictating.\nYour transcripts will appear here.")
+            Text("Hold Right ⌥ to dictate. Your transcripts will appear here.")
                 .font(.subheadline)
                 .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
@@ -138,6 +291,34 @@ struct DashboardView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 48)
     }
+
+    private var noResults: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 34))
+                .foregroundStyle(.tertiary)
+            Text("No matches")
+                .font(.headline)
+                .foregroundStyle(.secondary)
+            Text(appFilter == nil
+                 ? "Try a different search."
+                 : "Nothing here for this app. Try clearing the filter.")
+                .font(.subheadline)
+                .foregroundStyle(.tertiary)
+            if appFilter != nil || !searchText.isEmpty {
+                Button("Clear filters") {
+                    appFilter  = nil
+                    searchText = ""
+                }
+                .buttonStyle(.link)
+                .padding(.top, 2)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 40)
+    }
+
+    // ── Derived values ────────────────────────────────────────────────────
 
     private var greeting: String {
         let h = Calendar.current.component(.hour, from: Date())
@@ -148,16 +329,101 @@ struct DashboardView: View {
         }
     }
 
-    private var todayCount: Int {
-        appState.history.filter { Calendar.current.isDateInToday($0.date) }.count
+    struct Stats {
+        var today = 0, week = 0, total = 0, words = 0
     }
 
-    private var weekCount: Int {
-        appState.history.filter { Calendar.current.isDate($0.date, equalTo: Date(), toGranularity: .weekOfYear) }.count
+    /// All four figures in one pass. These are read several times per render, and the old
+    /// per-stat computed properties each walked the full history — the word count also
+    /// allocated a substring array per entry, on every keystroke in the search field.
+    private var stats: Stats {
+        let cal       = Calendar.current
+        let weekStart = cal.dateInterval(of: .weekOfYear, for: Date())?.start ?? .distantPast
+        var s = Stats()
+        for entry in appState.history {
+            s.total += 1
+            s.words += ActivityView.wordCount(entry.text)
+            if entry.date >= weekStart          { s.week  += 1 }
+            if cal.isDateInToday(entry.date)    { s.today += 1 }
+        }
+        return s
     }
 
-    private var totalWords: Int {
-        appState.history.reduce(0) { $0 + $1.text.split(separator: " ").count }
+    private static func wordCount(_ text: String) -> Int {
+        var count  = 0
+        var inWord = false
+        for scalar in text.unicodeScalars {
+            if CharacterSet.whitespacesAndNewlines.contains(scalar) {
+                inWord = false
+            } else if !inWord {
+                inWord = true
+                count += 1
+            }
+        }
+        return count
+    }
+
+    // Groups items into Today / Yesterday / This Week / month-year buckets, newest first.
+    static func group(_ items: [TranscriptEntry]) -> [(key: String, items: [TranscriptEntry])] {
+        let cal = Calendar.current
+        let groups = Dictionary(grouping: items) { item -> String in
+            if cal.isDateInToday(item.date)     { return "Today" }
+            if cal.isDateInYesterday(item.date)  { return "Yesterday" }
+            let days = cal.dateComponents([.day], from: item.date, to: Date()).day ?? 0
+            if days < 7                          { return "This Week" }
+            return item.date.formatted(.dateTime.month(.wide).year())
+        }
+        let pinned = ["Today", "Yesterday", "This Week"]
+        return groups.keys.sorted { a, b in
+            let ai = pinned.firstIndex(of: a)
+            let bi = pinned.firstIndex(of: b)
+            switch (ai, bi) {
+            case let (ai?, bi?): return ai < bi
+            case (.some, nil):   return true
+            case (nil, .some):   return false
+            case (nil, nil):
+                let da = groups[a]!.map(\.date).max() ?? .distantPast
+                let db = groups[b]!.map(\.date).max() ?? .distantPast
+                return da > db
+            }
+        }
+        .map { key in (key: key, items: groups[key]!) }
+    }
+}
+
+// MARK: - Search field
+
+private struct SearchField: View {
+    @Binding var text: String
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+            TextField("Search", text: $text)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+                .focused($focused)
+            if !text.isEmpty {
+                Button { text = "" } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.tertiary)
+                }
+                .buttonStyle(.plain)
+                .help("Clear search")
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(.quaternary.opacity(0.5), in: Capsule())
+        .overlay(
+            Capsule().stroke(focused ? Color.accentColor.opacity(0.6) : .clear, lineWidth: 1.5)
+        )
+        .animation(.easeOut(duration: 0.12), value: focused)
+        .onTapGesture { focused = true }
     }
 }
 
@@ -191,6 +457,7 @@ private struct MonitorToggleButton: View {
         .buttonStyle(.plain)
         .background(.background)
         .overlay(alignment: .top) { Divider() }
+        .help(isOn ? "Hide the system monitor" : "Show GPU, CPU and memory usage")
     }
 }
 
@@ -239,8 +506,8 @@ struct InferenceStatusCard: View {
             }
         }
         .padding(16)
-        .background(.background, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(.separator, lineWidth: 0.5))
+        .background(.background, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(.separator, lineWidth: 0.5))
     }
 
     @ViewBuilder
@@ -267,6 +534,12 @@ struct InferenceStatusCard: View {
                         ProgressView(value: p).tint(.accentColor).frame(width: 80)
                         Text(s).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
                     }
+                } else if case .error(let message) = opState {
+                    Text(message)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.red)
+                        .lineLimit(1)
+                        .help(message)
                 } else if let name = backend, opState == .idle {
                     HStack(spacing: 4) {
                         Circle().fill(.green).frame(width: 6, height: 6)
@@ -304,6 +577,11 @@ struct StatCard: View {
             Spacer()
             Text(value)
                 .font(.system(size: 26, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .contentTransition(.numericText())
+                .animation(.easeOut(duration: 0.25), value: value)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
             Text(label)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -312,110 +590,6 @@ struct StatCard: View {
         .frame(maxWidth: .infinity, minHeight: 110, alignment: .leading)
         .background(.background, in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(.separator, lineWidth: 0.5))
-    }
-}
-
-// MARK: - History
-
-struct HistoryView: View {
-    @Environment(AppState.self) private var appState
-    @State private var searchText   = ""
-    @State private var filterApp:   String? = nil
-
-    private var allApps: [String] {
-        Array(Set(appState.history.compactMap(\.appName))).sorted()
-    }
-
-    private var filtered: [TranscriptEntry] {
-        appState.history.filter { entry in
-            let matchesSearch = searchText.isEmpty
-                || entry.text.localizedCaseInsensitiveContains(searchText)
-            let matchesApp = filterApp == nil || entry.appName == filterApp
-            return matchesSearch && matchesApp
-        }
-    }
-
-    private var grouped: [(key: String, entries: [TranscriptEntry])] {
-        let cal = Calendar.current
-        let groups = Dictionary(grouping: filtered) { entry -> String in
-            if cal.isDateInToday(entry.date)    { return "Today" }
-            if cal.isDateInYesterday(entry.date) { return "Yesterday" }
-            let days = cal.dateComponents([.day], from: entry.date, to: Date()).day ?? 0
-            if days < 7                          { return "This Week" }
-            return entry.date.formatted(.dateTime.month(.wide).year())
-        }
-        let pinnedOrder = ["Today", "Yesterday", "This Week"]
-        // Representative date per section: most-recent entry in that section.
-        // Pinned labels always sort before month/year buckets via their index.
-        return groups.keys.sorted { a, b in
-            let ai = pinnedOrder.firstIndex(of: a)
-            let bi = pinnedOrder.firstIndex(of: b)
-            switch (ai, bi) {
-            case let (ai?, bi?): return ai < bi          // both pinned: preserve fixed order
-            case (.some, nil):   return true              // a is pinned, b is not
-            case (nil, .some):   return false             // b is pinned, a is not
-            case (nil, nil):                              // both are month/year: sort by most-recent entry date
-                let da = groups[a]!.map(\.date).max() ?? .distantPast
-                let db = groups[b]!.map(\.date).max() ?? .distantPast
-                return da > db
-            }
-        }
-        .map { key in (key: key, entries: groups[key]!) }
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            // Toolbar
-            HStack(spacing: 12) {
-                Text("History")
-                    .font(.largeTitle).bold()
-                Spacer()
-                if !allApps.isEmpty {
-                    Picker("App", selection: $filterApp) {
-                        Text("All Apps").tag(String?.none)
-                        Divider()
-                        ForEach(allApps, id: \.self) { app in
-                            Text(app).tag(String?.some(app))
-                        }
-                    }
-                    .frame(width: 140)
-                }
-            }
-            .padding(.horizontal, 24)
-            .padding(.top, 24)
-            .padding(.bottom, 12)
-
-            Divider()
-
-            if appState.history.isEmpty {
-                ContentUnavailableView(
-                    "No history yet",
-                    systemImage: "clock",
-                    description: Text("Your transcripts will appear here after your first dictation.")
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if filtered.isEmpty {
-                ContentUnavailableView(
-                    "No results",
-                    systemImage: "magnifyingglass",
-                    description: Text("Try a different search term or app filter.")
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                List {
-                    ForEach(grouped, id: \.key) { group in
-                        Section(group.key) {
-                            ForEach(group.entries) { entry in
-                                TranscriptRow(entry: entry)
-                                    .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))
-                            }
-                        }
-                    }
-                }
-                .listStyle(.inset)
-            }
-        }
-        .searchable(text: $searchText, prompt: "Search transcripts")
     }
 }
 
@@ -428,46 +602,67 @@ struct KnowledgeBaseView: View {
 
     private var store: KnowledgeStore { appState.knowledgeStore }
 
+    private var filledCount: Int {
+        KBField.allCases.filter { !(drafts[$0] ?? "").isEmpty }.count
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
-                Label("Smart Fill Profile", systemImage: "person.text.rectangle")
-                    .font(.headline)
-                Text("Stored locally. Injected into every LLM call so the AI can fill fields and personalise output using your real information.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 20)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Label("Smart Fill Profile", systemImage: "person.text.rectangle")
+                            .font(.headline)
+                        Spacer()
+                        statusPill
+                    }
+                    Text("Stored locally. Injected into every LLM call so the AI can fill fields and personalise output using your real information.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
-            Divider().padding(.horizontal, 20)
+                Divider()
 
-            VStack(spacing: 0) {
-                ForEach(KBField.allCases, id: \.rawValue) { field in
-                    fieldRow(field)
-                    if field != KBField.allCases.last {
-                        Divider().padding(.leading, 52)
+                VStack(spacing: 0) {
+                    ForEach(KBField.allCases, id: \.rawValue) { field in
+                        fieldRow(field)
+                        if field != KBField.allCases.last {
+                            Divider().padding(.leading, 32)
+                        }
+                    }
+                }
+                .background(.background, in: RoundedRectangle(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(.separator, lineWidth: 0.5))
+
+                if store.contextBlock == nil {
+                    HStack(spacing: 6) {
+                        Image(systemName: "info.circle")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text("Fill in at least one field to activate Smart Fill.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
-            .padding(.horizontal, 20)
-
-            if store.contextBlock == nil {
-                HStack(spacing: 6) {
-                    Image(systemName: "info.circle")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text("Fill in at least one field to activate Smart Fill.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 4)
-            }
-
-            Spacer(minLength: 0)
+            .padding(20)
         }
         .onAppear { syncDrafts() }
+    }
+
+    private var statusPill: some View {
+        let active = store.contextBlock != nil
+        return HStack(spacing: 5) {
+            Circle()
+                .fill(active ? Color.green : Color.secondary.opacity(0.5))
+                .frame(width: 6, height: 6)
+            Text(active ? "Active · \(filledCount) field\(filledCount == 1 ? "" : "s")" : "Inactive")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 8).padding(.vertical, 3)
+        .background(.quaternary.opacity(0.5), in: Capsule())
     }
 
     @ViewBuilder
@@ -490,6 +685,7 @@ struct KnowledgeBaseView: View {
                     store.set(field: field, value: newValue)
                 }
         }
+        .padding(.horizontal, 12)
         .padding(.vertical, 9)
     }
 
@@ -510,14 +706,14 @@ struct KnowledgeBaseView: View {
 // MARK: - Transcript Row (shared)
 
 struct TranscriptRow: View {
-    let entry:           TranscriptEntry
+    let entry: TranscriptEntry
     @Environment(AppState.self) private var appState
-    @State private var copied         = false
-    @State private var showCorrection = false
+    @State private var copied    = false
+    @State private var isHovered = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            AppBundleIcon(bundleIdentifier: entry.bundleIdentifier)
+            AppIcon(bundleIdentifier: entry.bundleIdentifier)
                 .frame(width: 28, height: 28)
                 .padding(.top, 1)
 
@@ -526,6 +722,7 @@ struct TranscriptRow: View {
                     .font(.body)
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
 
                 HStack(spacing: 6) {
                     if let app = entry.appName {
@@ -539,73 +736,65 @@ struct TranscriptRow: View {
                     Text(entry.date.formatted(.relative(presentation: .named)))
                         .font(.caption)
                         .foregroundStyle(.tertiary)
+                        .help(entry.date.formatted(date: .abbreviated, time: .shortened))
                 }
             }
 
             Spacer()
 
-            // Correct button
-            Button { showCorrection = true } label: {
-                Image(systemName: "pencil")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 20)
+            // Row actions stay out of the way until the row is hovered — with a dense feed,
+            // always-on buttons on every row read as noise.
+            HStack(spacing: 2) {
+                rowAction("pencil", help: "Correct this transcript") {
+                    appState.pendingCorrection = entry
+                }
+                rowAction(copied ? "checkmark" : "doc.on.clipboard",
+                          help: "Copy to clipboard",
+                          tint: copied ? .green : nil) {
+                    copy()
+                }
+                rowAction("trash", help: "Delete transcript") {
+                    appState.transcriptStore.delete(entry.id)
+                }
             }
-            .buttonStyle(.plain)
-            .help("Correct this transcript")
-
-            // Copy button
-            Button {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(entry.text, forType: .string)
-                copied = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
-            } label: {
-                Image(systemName: copied ? "checkmark" : "doc.on.clipboard")
-                    .font(.caption)
-                    .foregroundStyle(copied ? .green : .secondary)
-                    .frame(width: 20)
+            .opacity(isHovered || copied ? 1 : 0)
+            // Opacity alone leaves the buttons clickable while invisible — with Delete in
+            // the group that turns a stray click into silent data loss.
+            .allowsHitTesting(isHovered || copied)
+            .animation(.easeOut(duration: 0.12), value: isHovered)
+        }
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+        .onHover { isHovered = $0 }
+        .contextMenu {
+            Button("Correct…") { appState.pendingCorrection = entry }
+            Button("Copy")     { copy() }
+            Divider()
+            Button("Delete", role: .destructive) {
+                appState.transcriptStore.delete(entry.id)
             }
-            .buttonStyle(.plain)
-            .help("Copy to clipboard")
-        }
-        .padding(.vertical, 4)
-        .sheet(isPresented: $showCorrection) {
-            CorrectionSheet(entry: entry,
-                            correctionStore: appState.correctionStore,
-                            transcriptStore: appState.transcriptStore)
         }
     }
-}
 
-// MARK: - App icon helper
-// Icon is resolved once on first appear and cached — NSWorkspace lookups hit the filesystem
-// and should not run on every SwiftUI render.
-
-struct AppBundleIcon: View {
-    let bundleIdentifier: String?
-    @State private var cachedIcon: NSImage?
-
-    var body: some View {
-        Image(nsImage: cachedIcon ?? placeholder)
-            .resizable()
-            .aspectRatio(contentMode: .fit)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-            .task(id: bundleIdentifier) { cachedIcon = resolveIcon() }
-    }
-
-    private func resolveIcon() -> NSImage {
-        guard let id = bundleIdentifier else { return placeholder }
-        if let running = NSRunningApplication.runningApplications(withBundleIdentifier: id).first,
-           let icon = running.icon { return icon }
-        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) {
-            return NSWorkspace.shared.icon(forFile: url.path)
+    private func rowAction(_ symbol: String, help: String,
+                           tint: Color? = nil,
+                           action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.caption)
+                .foregroundStyle(tint ?? .secondary)
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
         }
-        return placeholder
+        .buttonStyle(.plain)
+        .help(help)
     }
 
-    private var placeholder: NSImage {
-        NSImage(systemSymbolName: "app.dashed", accessibilityDescription: nil) ?? NSImage()
+    private func copy() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(entry.text, forType: .string)
+        copied = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
     }
 }
 
@@ -620,6 +809,11 @@ struct CorrectionSheet: View {
     @State private var corrected  = ""
     @State private var shouldLearn = true
 
+    private var trimmed: String {
+        corrected.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    private var canSave: Bool { !trimmed.isEmpty && trimmed != entry.text }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Correct Transcript")
@@ -631,6 +825,7 @@ struct CorrectionSheet: View {
                 Text(entry.text)
                     .font(.system(.body, design: .monospaced))
                     .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
                     .padding(8)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 6))
@@ -659,10 +854,10 @@ struct CorrectionSheet: View {
                 Spacer()
                 Button("Cancel") { dismiss() }
                     .keyboardShortcut(.escape)
-                Button("Save & Learn") { save() }
+                Button(shouldLearn ? "Save & Learn" : "Save") { save() }
                     .buttonStyle(.borderedProminent)
-                    .disabled(corrected.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                              || corrected == entry.text)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!canSave)
             }
         }
         .padding(24)
@@ -671,8 +866,8 @@ struct CorrectionSheet: View {
     }
 
     private func save() {
-        let trimmed = corrected.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, trimmed != entry.text else { dismiss(); return }
+        guard canSave else { dismiss(); return }
+        let trimmed = self.trimmed
 
         transcriptStore.update(entry.withText(trimmed))
 
@@ -682,17 +877,14 @@ struct CorrectionSheet: View {
             // stores: heard="that guy", correct="Pranav"  (not the full sentence)
             let pairs = WordDiff.extract(original: entry.text, corrected: trimmed)
 
-            if pairs.isEmpty {
-                // No word changes detected — only punctuation/casing differs. Don't store a
-                // full-sentence correction pair; those never match future transcripts phonetically
-                // and would pollute the corrections dictionary.
-            } else {
-                for pair in pairs where !pair.heard.isEmpty && !pair.correct.isEmpty {
-                    correctionStore.add(CorrectionEntry(
-                        heard: pair.heard, correct: pair.correct,
-                        bundleIdentifier: entry.bundleIdentifier
-                    ))
-                }
+            // If pairs is empty only punctuation/casing differs. Don't store a full-sentence
+            // correction pair; those never match future transcripts phonetically and would
+            // pollute the corrections dictionary.
+            for pair in pairs where !pair.heard.isEmpty && !pair.correct.isEmpty {
+                correctionStore.add(CorrectionEntry(
+                    heard: pair.heard, correct: pair.correct,
+                    bundleIdentifier: entry.bundleIdentifier
+                ))
             }
         }
         dismiss()

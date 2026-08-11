@@ -50,6 +50,7 @@ final class SystemMonitor {
     }
 
     func start() {
+        stop()   // idempotent: never leave a previous timer running alongside a new one
         refresh()
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             self?.refresh()

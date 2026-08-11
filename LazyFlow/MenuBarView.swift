@@ -59,6 +59,12 @@ struct MenuBarView: View {
                 openSettings()
                 NSApp.activate(ignoringOtherApps: true)
             }
+            MenuBarActionRow(label: "Setup & Permissions…", icon: "checkmark.shield") {
+                NotificationCenter.default.post(name: .lazyflowOpenSetup, object: nil)
+            }
+            MenuBarActionRow(label: "Check for Updates…", icon: "arrow.down.circle") {
+                NotificationCenter.default.post(name: .lazyflowCheckForUpdates, object: nil)
+            }
             MenuBarActionRow(label: "Quit LazyFlow", icon: "power", isDestructive: true) {
                 NSApp.terminate(nil)
             }
@@ -143,13 +149,17 @@ struct RecordButton: View {
 
 struct MenuBarTranscriptRow: View {
     let entry: TranscriptEntry
-    @Environment(AppState.self) private var appState
-    @State private var isHovered      = false
-    @State private var copied         = false
-    @State private var showCorrection = false
+    @Environment(AppState.self)  private var appState
+    @Environment(\.openWindow)   private var openWindow
+    @State private var isHovered = false
+    @State private var copied    = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
+            AppIcon(bundleIdentifier: entry.bundleIdentifier, cornerRadius: 4)
+                .frame(width: 16, height: 16)
+                .padding(.top, 1)
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.text)
                     .font(.system(size: 12))
@@ -173,8 +183,10 @@ struct MenuBarTranscriptRow: View {
 
             Spacer(minLength: 4)
 
-            // Correct button
-            Button { showCorrection = true } label: {
+            // Correct button — hands the entry to the main window. A sheet cannot be
+            // presented from inside the menu bar popover; the popover gives up key status
+            // the moment the sheet appears and both disappear together.
+            Button { correctInMainWindow() } label: {
                 Image(systemName: "pencil")
                     .font(.caption)
                     .foregroundStyle(Color.secondary)
@@ -186,8 +198,7 @@ struct MenuBarTranscriptRow: View {
 
             // Copy button
             Button {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(entry.text, forType: .string)
+                copyText()
                 copied = true
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
             } label: {
@@ -208,11 +219,25 @@ struct MenuBarTranscriptRow: View {
         )
         .padding(.horizontal, 4)
         .onHover { isHovered = $0 }
-        .sheet(isPresented: $showCorrection) {
-            CorrectionSheet(entry: entry,
-                            correctionStore: appState.correctionStore,
-                            transcriptStore: appState.transcriptStore)
+        .contextMenu {
+            Button("Correct…")           { correctInMainWindow() }
+            Button("Copy")               { copyText() }
+            Divider()
+            Button("Delete", role: .destructive) {
+                appState.transcriptStore.delete(entry.id)
+            }
         }
+    }
+
+    private func correctInMainWindow() {
+        appState.pendingCorrection = entry
+        openWindow(id: "main")
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func copyText() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(entry.text, forType: .string)
     }
 }
 
