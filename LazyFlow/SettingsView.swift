@@ -1,57 +1,166 @@
 import SwiftUI
 
+// Settings is split into the standard macOS preference tabs. It used to be one long
+// scrolling column of every section stacked together, which made the window very tall and
+// gave no sense of where anything lived.
 struct SettingsView: View {
-    @Environment(AppState.self) private var appState
-    @State private var apiKeyVisible = false
-    @State private var customLLMText = ""
+    var body: some View {
+        TabView {
+            GeneralSettingsTab()
+                .tabItem { Label("General", systemImage: "gearshape") }
+            ProvidersSettingsTab()
+                .tabItem { Label("Providers", systemImage: "key.horizontal") }
+            SpeechSettingsTab()
+                .tabItem { Label("Speech", systemImage: "waveform") }
+            CleanupSettingsTab()
+                .tabItem { Label("Cleanup", systemImage: "sparkles") }
+        }
+        .frame(width: 560, height: 480)
+    }
+}
+
+// MARK: - Tab scaffold
+
+/// Every tab is a padded, scrollable column with the same rhythm.
+private struct SettingsTab<Content: View>: View {
+    @ViewBuilder let content: () -> Content
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 0) {
-                providerSection()
-                Divider().padding(.horizontal, 20)
-                transcriptionSection()
-                Divider().padding(.horizontal, 20)
-                postProcessingSection()
+            VStack(alignment: .leading, spacing: 18) {
+                content()
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(20)
         }
-        .frame(width: 520)
+    }
+}
+
+// MARK: - General
+
+private struct GeneralSettingsTab: View {
+    @Environment(AppState.self) private var appState
+
+    var body: some View {
+        @Bindable var appState = appState
+        SettingsTab {
+            SectionHeader(icon: "slider.horizontal.3", title: "General")
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Text insertion").font(.subheadline.weight(.medium))
+                Picker("", selection: $appState.insertionMode) {
+                    ForEach(InsertionMode.allCases) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                .pickerStyle(.radioGroup).labelsHidden()
+            }
+
+            Divider()
+
+            Toggle(isOn: $appState.showDockIcon) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Show Dock icon")
+                    Text("Off keeps LazyFlow menu-bar-only. It stays reachable from the menu bar.")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Toggle(isOn: $appState.liveTranscriptPreviewEnabled) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Live transcript preview")
+                    Text("Experimental. Shows on-device partial text in the recording overlay while you speak. Doesn't change the final transcript.")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .onChange(of: appState.liveTranscriptPreviewEnabled) { _, on in
+                if on { SpeechPreviewService.requestAuthorization { _ in } }
+            }
+
+            Toggle(isOn: $appState.pressEnterCommandEnabled) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Voice command: press enter")
+                    Text("Say “press enter” at the end of a dictation to submit the text.")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Divider()
+
+            SectionHeader(icon: "keyboard", title: "Shortcuts")
+            VStack(alignment: .leading, spacing: 8) {
+                shortcutRow("Hold Right ⌥", "Push-to-talk — release to transcribe and paste")
+                shortcutRow("Double-tap ⌥", "Hands-free toggle recording")
+                shortcutRow("Esc",          "Cancel the current recording")
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+        }
     }
 
-    // MARK: - Provider section
+    private func shortcutRow(_ key: String, _ detail: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(key)
+                .font(.system(size: 12, design: .monospaced).weight(.semibold))
+                .frame(width: 104, alignment: .leading)
+            Text(detail)
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+    }
+}
 
-    @ViewBuilder
-    private func providerSection() -> some View {
+// MARK: - Providers
+
+private struct ProvidersSettingsTab: View {
+    @Environment(AppState.self) private var appState
+
+    private static let keyedProviders = LLMProvider.allCases.filter { $0 != .custom }
+
+    var body: some View {
         @Bindable var store = appState.providerStore
-        VStack(alignment: .leading, spacing: 16) {
+        SettingsTab {
             SectionHeader(icon: "wand.and.stars", title: "AI Providers")
-            Text("Keys stored in the system Keychain. Click the lock to edit a key.")
+            Text("Keys are stored in the system Keychain and never leave your Mac except to call the provider you pick.")
                 .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
-            // Per-provider key rows
-            let providers = LLMProvider.allCases.filter { $0 != .custom }
             VStack(spacing: 0) {
-                ForEach(providers) { provider in
+                ForEach(Self.keyedProviders) { provider in
                     ProviderKeyRow(provider: provider, store: appState.providerStore)
-                    if provider != providers.last { Divider().padding(.leading, 34) }
+                    if provider != Self.keyedProviders.last { Divider().padding(.leading, 34) }
                 }
             }
             .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
 
-            // Dictation: Groq-only, model picker only
-            VStack(alignment: .leading, spacing: 6) {
-                Label("Dictation Model", systemImage: "waveform.badge.mic")
+            Divider()
+
+            // Provider and model used to clean up completed transcripts.
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Dictation Cleanup", systemImage: "waveform.badge.mic")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.secondary)
 
                 HStack(spacing: 8) {
-                    Text("Groq")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.tertiary)
-                        .frame(width: 36, alignment: .leading)
+                    Picker("", selection: $store.dictationProvider) {
+                        ForEach(Self.keyedProviders) { provider in
+                            Text(provider.displayName).tag(provider)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 150)
+                    .onChange(of: store.dictationProvider) { _, provider in
+                        store.dictationModel = provider.defaultModel
+                    }
 
                     Picker("", selection: $store.dictationModel) {
-                        ForEach(LLMProvider.groq.presetModels) { m in
+                        ForEach(store.dictationProvider.presetModels) { m in
                             HStack {
                                 Text(m.name)
                                 if let b = m.badge {
@@ -61,23 +170,50 @@ struct SettingsView: View {
                         }
                     }
                     .labelsHidden()
-                    .frame(width: 200)
+                    .frame(maxWidth: .infinity)
+                }
+
+                if !store.hasKey(for: store.dictationProvider) {
+                    Label(
+                        "No \(store.dictationProvider.displayName) key yet — cleanup will fall back to your Groq key, or be skipped.",
+                        systemImage: "exclamationmark.triangle.fill"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
                 }
             }
-
-            // Agent: full provider + model picker
-            AgentModelPicker(store: appState.providerStore)
         }
-        .padding(20)
     }
+}
 
-    // MARK: - Transcription
+// MARK: - Speech (transcription)
 
-    @ViewBuilder
-    private func transcriptionSection() -> some View {
+private struct SpeechSettingsTab: View {
+    @Environment(AppState.self) private var appState
+
+    var body: some View {
         @Bindable var appState = appState
-        VStack(alignment: .leading, spacing: 14) {
+        SettingsTab {
             SectionHeader(icon: "waveform", title: "Transcription")
+
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Dictation language").font(.subheadline.weight(.medium))
+                    Text("Choosing one language can improve speed and accuracy.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Picker("", selection: $appState.dictationLanguage) {
+                    ForEach(DictationLanguage.allCases) { language in
+                        Text(language.displayName).tag(language)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 160)
+            }
+
+            Divider()
 
             Picker("", selection: $appState.sttBackend) {
                 Text("Cloud (Groq)").tag(STTBackend.cloud)
@@ -86,6 +222,13 @@ struct SettingsView: View {
             .pickerStyle(.segmented).labelsHidden()
 
             if appState.sttBackend == .cloud {
+                if !appState.providerStore.hasKey(for: .groq) && appState.apiKey.isEmpty {
+                    Label("Cloud transcription needs a Groq key — add one in the Providers tab.",
+                          systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 HStack(spacing: 10) {
                     ForEach(Self.cloudSTTModels) { m in
                         CloudModelCard(
@@ -101,95 +244,12 @@ struct SettingsView: View {
                         LocalSTTModelCard(model: model)
                     }
                 }
-            }
-        }
-        .padding(20)
-    }
-
-    // MARK: - Post-processing
-
-    @ViewBuilder
-    private func postProcessingSection() -> some View {
-        @Bindable var appState = appState
-        VStack(alignment: .leading, spacing: 14) {
-            SectionHeader(icon: "cpu", title: "Post-processing")
-
-            Picker("", selection: $appState.llmBackend) {
-                Text("Cloud (Groq)").tag(LLMBackend.cloud)
-                Text("On-device (MLX)").tag(LLMBackend.local)
-            }
-            .pickerStyle(.segmented).labelsHidden()
-
-            if appState.llmBackend == .cloud {
-                cloudLLMSection()
-            } else {
-                VStack(spacing: 8) {
-                    ForEach(LocalLLMModel.allCases) { model in
-                        LocalLLMModelCard(model: model)
-                    }
-                }
-                Text("Runs entirely on your Mac — no API key required. Smaller models are faster; larger models apply tone rules more reliably.")
+                Text("Runs entirely on your Mac — no key and no network. Models are downloaded once and cached.")
                     .font(.caption).foregroundStyle(.secondary)
-            }
-        }
-        .padding(20)
-    }
-
-    @ViewBuilder
-    private func cloudLLMSection() -> some View {
-        @Bindable var appState = appState
-        VStack(alignment: .leading, spacing: 10) {
-            VStack(spacing: 0) {
-                ForEach(Self.cloudLLMPresets) { preset in
-                    let isSelected = appState.llmModel == preset.id && customLLMText.isEmpty
-                    Button {
-                        appState.llmModel = preset.id; customLLMText = ""
-                    } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                                .font(.system(size: 15))
-                                .foregroundStyle(isSelected ? Color.accentColor : Color.secondary.opacity(0.4))
-                                .frame(width: 18)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(preset.name).font(.system(size: 13, weight: .medium)).foregroundStyle(.primary)
-                                Text(preset.description).font(.system(size: 11)).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Text(preset.id).font(.system(size: 10, design: .monospaced)).foregroundStyle(.tertiary).lineLimit(1)
-                        }
-                        .padding(.horizontal, 12).padding(.vertical, 8).contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .background(isSelected ? Color.accentColor.opacity(0.06) : Color.clear)
-                    if preset.id != Self.cloudLLMPresets.last?.id { Divider().padding(.leading, 40) }
-                }
-            }
-            .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Custom model ID").font(.caption).foregroundStyle(.secondary)
-                HStack(spacing: 8) {
-                    TextField("e.g. llama-3.1-70b-versatile", text: $customLLMText)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(.body, design: .monospaced))
-                        .onChange(of: customLLMText) { _, val in
-                            let t = val.trimmingCharacters(in: .whitespaces)
-                            guard !t.isEmpty else { return }
-                            appState.llmModel = t
-                        }
-                    if !customLLMText.isEmpty {
-                        Button { customLLMText = ""; appState.llmModel = Self.cloudLLMPresets[0].id } label: {
-                            Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
-                        }.buttonStyle(.plain)
-                    }
-                }
-                Text("Any model on your Groq account. See [console.groq.com/docs/models](https://console.groq.com/docs/models)")
-                    .font(.caption).foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
-
-    // MARK: - Static model data
 
     struct CloudSTTModel: Identifiable {
         let id: String; let name: String; let badge: String; let badgeColor: Color; let detail: String
@@ -200,17 +260,64 @@ struct SettingsView: View {
         .init(id: "whisper-large-v3-turbo", name: "Large Turbo", badge: "Fast",     badgeColor: .green,
               detail: "6× faster with very good accuracy. Ideal for everyday use."),
     ]
+}
 
-    struct CloudLLMPreset: Identifiable {
-        let id: String; let name: String; let description: String
+// MARK: - Cleanup (post-processing)
+
+private struct CleanupSettingsTab: View {
+    @Environment(AppState.self) private var appState
+
+    var body: some View {
+        @Bindable var appState = appState
+        SettingsTab {
+            SectionHeader(icon: "cpu", title: "Post-processing")
+            Text("How raw speech is cleaned up before it lands at your cursor. Per-app rules live in App Profiles.")
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Picker("", selection: $appState.llmBackend) {
+                Text("Cloud").tag(LLMBackend.cloud)
+                Text("On-device (MLX)").tag(LLMBackend.local)
+            }
+            .pickerStyle(.segmented).labelsHidden()
+
+            if appState.llmBackend == .cloud {
+                cloudProviderSummary
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(LocalLLMModel.allCases) { model in
+                        LocalLLMModelCard(model: model)
+                    }
+                }
+                Text("Runs entirely on your Mac — no API key required. Smaller models are faster; larger models apply tone rules more reliably.")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
-    static let cloudLLMPresets: [CloudLLMPreset] = [
-        .init(id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B",        description: "Best quality · recommended default"),
-        .init(id: "llama-3.1-8b-instant",    name: "Llama 3.1 8B Instant", description: "Fastest · lowest latency"),
-        .init(id: "gemma2-9b-it",            name: "Gemma 2 9B",           description: "Compact, fast, accurate"),
-        .init(id: "mixtral-8x7b-32768",      name: "Mixtral 8×7B",         description: "Strong on longer content"),
-        .init(id: "openai/gpt-oss-20b",      name: "GPT OSS 20B",          description: "Previous default · OpenAI via Groq"),
-    ]
+
+    private var cloudProviderSummary: some View {
+        let store = appState.providerStore
+        return HStack(spacing: 10) {
+            Image(systemName: store.dictationProvider.icon)
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(store.dictationProvider.displayName)
+                    .font(.system(size: 13, weight: .medium))
+                Text(store.dictationModel)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer()
+            Text("Change in Providers")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+        .padding(12)
+        .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+    }
 }
 
 // MARK: - Provider key row (locked by default, unlock to edit)
@@ -223,8 +330,8 @@ private struct ProviderKeyRow: View {
     @State private var draft     = ""
     @FocusState private var fieldFocused: Bool
 
-    private var storedKey: String { store.apiKey(for: provider) }
-    private var hasKey:    Bool   { !storedKey.isEmpty }
+    private var hasKey: Bool { store.hasKey(for: provider) }
+    private var canSave: Bool { !draft.trimmingCharacters(in: .whitespaces).isEmpty }
 
     var body: some View {
         HStack(spacing: 10) {
@@ -245,12 +352,14 @@ private struct ProviderKeyRow: View {
                     .textFieldStyle(.roundedBorder)
                     .focused($fieldFocused)
                     .onSubmit { save() }
+                    // Focus has to be requested after the field exists — setting it in the
+                    // same update that flips `isEditing` targets a field that isn't there yet.
+                    .onAppear { fieldFocused = true }
 
                 Button("Save") { save() }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
-                    .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty &&
-                              draft != storedKey)
+                    .disabled(!canSave)
 
                 Button("Cancel") {
                     draft = ""
@@ -278,7 +387,6 @@ private struct ProviderKeyRow: View {
                 Button {
                     draft = ""  // never pre-fill with the actual key
                     isEditing = true
-                    fieldFocused = true
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: hasKey ? "lock.fill" : "plus.circle")
@@ -289,6 +397,19 @@ private struct ProviderKeyRow: View {
                     .foregroundStyle(Color.accentColor)
                 }
                 .buttonStyle(.plain)
+
+                // Removing a key used to be impossible — the only way out was overwriting it.
+                if hasKey {
+                    Button {
+                        store.clearApiKey(for: provider)
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Remove the \(provider.displayName) key from your Keychain")
+                }
             }
         }
         .padding(.horizontal, 12)
@@ -297,8 +418,8 @@ private struct ProviderKeyRow: View {
     }
 
     private func save() {
-        let trimmed = draft.trimmingCharacters(in: .whitespaces)
-        if !trimmed.isEmpty { store.setApiKey(trimmed, for: provider) }
+        guard canSave else { return }
+        store.setApiKey(draft.trimmingCharacters(in: .whitespaces), for: provider)
         draft = ""
         isEditing = false
     }
@@ -310,51 +431,6 @@ private struct ProviderKeyRow: View {
         case .google:    "AIza…"
         case .anthropic: "sk-ant-…"
         default:         "API key"
-        }
-    }
-}
-
-// MARK: - Agent model picker (full provider + model)
-
-private struct AgentModelPicker: View {
-    @Bindable var store: LLMProviderStore
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Label("Computer Use Agent", systemImage: "sparkles")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.secondary)
-
-            HStack(spacing: 8) {
-                Picker("", selection: $store.agentProvider) {
-                    ForEach(LLMProvider.allCases.filter { $0 != .custom }) { p in
-                        Text(p.displayName).tag(p)
-                    }
-                }
-                .labelsHidden()
-                .frame(width: 150)
-                .onChange(of: store.agentProvider) { _, p in
-                    store.agentModel = p.defaultModel(for: .agent)
-                }
-
-                Picker("", selection: $store.agentModel) {
-                    ForEach(store.agentProvider.presetModels) { m in
-                        HStack {
-                            Text(m.name)
-                            if let b = m.badge {
-                                Text("· \(b)").foregroundStyle(.secondary).font(.caption)
-                            }
-                        }.tag(m.id)
-                    }
-                }
-                .labelsHidden()
-
-                // Capability badges for selected model
-                if let spec = store.agentProvider.presetModels.first(where: { $0.id == store.agentModel }) {
-                    if spec.vision { badgePill("Vision", color: .blue)  }
-                    if spec.tools  { badgePill("Tools",  color: .purple) }
-                }
-            }
         }
     }
 }
@@ -387,7 +463,8 @@ private struct CloudModelCard: View {
             .padding(12).frame(maxWidth: .infinity, alignment: .leading)
             .background(isSelected ? Color.accentColor.opacity(0.08) : Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(isSelected ? Color.accentColor.opacity(0.35) : Color.clear, lineWidth: 1))
-        }.buttonStyle(.plain)
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -404,6 +481,11 @@ private struct LocalSTTModelCard: View {
         guard case .busy = appState.localSTTOpState else { return false }
         return appState.localSTTModel == model
     }
+    private var errorForMe: String? {
+        guard case .error(let msg) = appState.localSTTOpState,
+              appState.localSTTModel == model else { return nil }
+        return msg
+    }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -417,13 +499,32 @@ private struct LocalSTTModelCard: View {
                 if isBusyForMe, case .busy(let p, let s) = appState.localSTTOpState {
                     progressRow(p, s)
                 }
+                // The STT card silently swallowed load failures — only the LLM card showed them.
+                if let err = errorForMe {
+                    Label(err, systemImage: "exclamationmark.triangle.fill")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.red)
+                        .padding(.top, 2)
+                }
             }
             Spacer()
             actionButton()
         }
         .padding(12)
-        .background(isActive ? Color.accentColor.opacity(0.06) : Color.secondary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(isActive ? Color.accentColor.opacity(0.3) : Color.clear, lineWidth: 1))
+        .background(
+            errorForMe != nil
+                ? Color.red.opacity(0.04)
+                : isActive ? Color.accentColor.opacity(0.06) : Color.secondary.opacity(0.04),
+            in: RoundedRectangle(cornerRadius: 8)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8).stroke(
+                errorForMe != nil
+                    ? Color.red.opacity(0.25)
+                    : isActive ? Color.accentColor.opacity(0.3) : Color.clear,
+                lineWidth: 1
+            )
+        )
     }
 
     @ViewBuilder private func actionButton() -> some View {
@@ -437,10 +538,15 @@ private struct LocalSTTModelCard: View {
                 Button("Use") { appState.loadLocalSTT(model) }.buttonStyle(.borderedProminent).controlSize(.small)
                 Button(role: .destructive) { appState.deleteLocalSTT(model) } label: {
                     Image(systemName: "trash").font(.system(size: 11))
-                }.buttonStyle(.bordered).controlSize(.small)
+                }
+                .buttonStyle(.bordered).controlSize(.small)
+                .help("Delete the downloaded model")
             }
+        } else if errorForMe != nil {
+            Button("Retry") { appState.loadLocalSTT(model) }
+                .buttonStyle(.bordered).controlSize(.small)
         } else {
-            Button("Download") { appState.localSTTModel = model; appState.loadLocalSTT(model) }
+            Button("Download") { appState.loadLocalSTT(model) }
                 .buttonStyle(.bordered).controlSize(.small)
                 .disabled(appState.localSTTOpState.isBusy)
         }
@@ -520,13 +626,15 @@ private struct LocalLLMModelCard: View {
                 Button("Use") { appState.loadLocalLLM(model) }.buttonStyle(.borderedProminent).controlSize(.small)
                 Button(role: .destructive) { appState.deleteLocalLLM(model) } label: {
                     Image(systemName: "trash").font(.system(size: 11))
-                }.buttonStyle(.bordered).controlSize(.small)
+                }
+                .buttonStyle(.bordered).controlSize(.small)
+                .help("Delete the downloaded model")
             }
         } else if errorForMe != nil {
-            Button("Retry") { appState.localLLMModel = model; appState.loadLocalLLM(model) }
+            Button("Retry") { appState.loadLocalLLM(model) }
                 .buttonStyle(.bordered).controlSize(.small)
         } else {
-            Button("Download") { appState.localLLMModel = model; appState.loadLocalLLM(model) }
+            Button("Download") { appState.loadLocalLLM(model) }
                 .buttonStyle(.bordered).controlSize(.small)
                 .disabled(appState.localLLMOpState.isBusy)
         }

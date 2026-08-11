@@ -10,24 +10,22 @@ enum PostProcessingError: LocalizedError {
 }
 
 struct PostProcessingService {
-    let apiKey:  String
-    let baseURL: String
-    let model:   String
+    let config: LLMConfig
 
-    init(apiKey: String,
-         baseURL: String = "https://api.groq.com/openai/v1",
-         model: String   = "openai/gpt-oss-20b") {
-        self.apiKey  = apiKey
-        self.baseURL = baseURL
-        self.model   = model
+    // Provider-agnostic: the config carries provider/baseURL/model so the same
+    // cleanup prompt works whether the backend speaks the OpenAI or Anthropic wire format.
+    init(config: LLMConfig) {
+        self.config = config
     }
+
+    private var model: String { config.model }
 
     func process(rawTranscript: String,
                  profile: AppProfile,
                  corrections: [CorrectionEntry] = [],
                  kbContext: String? = nil,
                  focusContext: FocusContext? = nil) async throws -> String {
-        guard let (setup, style) = profile.resolvedPromptComponents, !apiKey.isEmpty else {
+        guard let (setup, style) = profile.resolvedPromptComponents, !config.apiKey.isEmpty else {
             return rawTranscript
         }
 
@@ -80,50 +78,40 @@ struct PostProcessingService {
         print("[LazyFlow] ── system prompt ──\n\(systemPrompt)\n── user message ──\n\(userMessage)")
 #endif
 
-        let endpoint = URL(string: "\(baseURL)/chat/completions")!
-        var request  = URLRequest(url: endpoint, timeoutInterval: 30)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json",  forHTTPHeaderField: "Content-Type")
-
-        let body: [String: Any] = [
-            "model": model,
-            "messages": [
-                ["role": "system", "content": systemPrompt],
-                ["role": "user",   "content": userMessage]
-            ],
-            "temperature": 0.0
+        // Route through the shared multi-provider client so Anthropic (Messages API)
+        // and OpenAI-compatible providers both work with the same cleanup prompt.
+        let client = LLMClient(config: config)
+        let messages: [[String: Any]] = [
+            ["role": "system", "content": systemPrompt],
+            ["role": "user",   "content": userMessage],
         ]
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
-        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
-
-        print("[LazyFlow] 🤖 HTTP \(statusCode)")
-#if LAZYFLOW_VERBOSE
-        print("[LazyFlow] ── raw response ──\n\(String(data: data, encoding: .utf8) ?? "<binary>")")
-#endif
-
-        if statusCode != 200 {
-            let msg = String(data: data, encoding: .utf8) ?? "unknown"
-#if DEBUG
-            print("[LazyFlow] 🤖 Post-processing error body: \(msg)")
-#endif
-            throw PostProcessingError.httpError(statusCode, "Provider returned \(statusCode) — check your API key or try again.")
+        let response: LLMClient.ChatResponse
+        do {
+            response = try await client.chat(
+                messages: messages,
+                temperature: 0.0,
+                maxTokens: outputTokenLimit(for: rawTranscript)
+            )
+        } catch let err as LLMError {
+            if case .httpError(let code, _) = err {
+                throw PostProcessingError.httpError(code, "Provider returned \(code) — check your API key or try again.")
+            }
+            throw err
         }
 
-        struct Msg:      Decodable { let content: String }
-        struct Choice:   Decodable { let message: Msg; let finish_reason: String? }
-        struct Response: Decodable { let choices: [Choice] }
-
-        let decoded = try JSONDecoder().decode(Response.self, from: data)
-        let choice  = decoded.choices.first
-
-        let result = choice?.message.content
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? rawTranscript
+        let result = response.content.isEmpty ? rawTranscript : response.content
 
         // Log metadata only — never log transcript content in any build
         print("[LazyFlow] 🤖 \(profile.displayName) [\(profile.tone.displayName)] \(result.split(separator: " ").count) words")
         return result
+    }
+
+    /// Cleanup output should be close in size to its input. A bounded, length-aware cap avoids
+    /// paying for runaway reasoning or malformed responses while leaving ample room for languages
+    /// whose tokenization is less compact than English.
+    private func outputTokenLimit(for transcript: String) -> Int {
+        let estimatedTokens = max(1, (transcript.utf8.count + 2) / 3)
+        return min(2048, max(160, estimatedTokens * 2 + 64))
     }
 }

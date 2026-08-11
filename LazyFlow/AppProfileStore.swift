@@ -18,8 +18,10 @@ final class AppProfileStore {
     // Returns existing profile or creates a sensible default, saves it, and returns it
     func profileOrDefault(for bundleIdentifier: String, displayName: String) -> AppProfile {
         if let existing = profiles[bundleIdentifier] { return existing }
-        let tone    = AppProfile.defaultTone(for: bundleIdentifier)
-        let profile = AppProfile(bundleIdentifier: bundleIdentifier, displayName: displayName, tone: tone)
+        let profile = AppProfile.smartDefault(
+            bundleIdentifier: bundleIdentifier,
+            displayName: displayName
+        )
         upsert(profile)
         return profile
     }

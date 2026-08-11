@@ -2,14 +2,28 @@
 
 native macos dictation app. hold right ⌥ to speak, release to paste cleaned text wherever your cursor is.
 
-uses groq whisper for transcription and an llm to clean up the output — fixing punctuation, removing filler words, preserving code identifiers, whatever the app you're typing into needs.
+uses whisper for transcription and an llm to clean up the output — fixing punctuation, removing filler words, preserving code identifiers, whatever the app you're typing into needs.
+
+## install
+
+download the latest `LazyFlow.dmg` from
+[releases](https://github.com/sanjaibalajee/LazyFlow/releases), open it, and drag
+LazyFlow to Applications. the build is signed and notarized by Apple, so it opens
+without any security prompt.
+
+on first launch macOS asks for **microphone** and **accessibility** — both are
+required for dictation, and the setup flow walks you through them.
+
+building from source? see [RELEASING.md](RELEASING.md).
 
 ## setup
 
-1. get a free api key at [groq.com](https://groq.com)
-2. open lazyflow → settings → paste your key
-3. grant accessibility permission when prompted (required for the global hotkey)
-4. grant microphone permission when prompted
+on first launch a guided setup walks you through the whole thing: add a key, then grant accessibility + microphone. you can re-open it anytime from the menu bar → **Setup & Permissions…**
+
+- **transcription** — groq whisper (free key at [console.groq.com](https://console.groq.com/keys)) by default, or run fully on-device with a local Parakeet/Whisper model (no key).
+- **cleanup llm** — groq by default; add an **Anthropic (Claude), OpenAI, or Google** key in settings to use another provider for dictation cleanup. accuracy-first setups should use Claude.
+
+updates ship via sparkle — menu bar → **Check for Updates…** (see [RELEASING.md](RELEASING.md) to configure the feed).
 
 ## usage
 
