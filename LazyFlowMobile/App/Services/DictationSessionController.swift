@@ -1,6 +1,20 @@
 import Foundation
 import SwiftUI
 
+enum DictationSessionError: LocalizedError {
+    case unavailableAppGroup
+    case missingGroqKey
+
+    var errorDescription: String? {
+        switch self {
+        case .unavailableAppGroup:
+            "The app and keyboard bridge is unavailable. Open Settings to check the App Group capability."
+        case .missingGroqKey:
+            "Groq is selected but no API key is saved. Add one in Settings or choose Apple On-Device."
+        }
+    }
+}
+
 @MainActor
 final class DictationSessionController: ObservableObject {
     @Published private(set) var phase: DictationPhase
@@ -9,6 +23,9 @@ final class DictationSessionController: ObservableObject {
     @Published var tone: MobileTone {
         didSet { store.setTone(tone) }
     }
+
+    let settings: ProcessingSettings
+    let history: HistoryStore
 
     private let store: SharedDictationStore
     private let audio: AudioSessionController
@@ -20,11 +37,15 @@ final class DictationSessionController: ObservableObject {
     init(
         store: SharedDictationStore = SharedDictationStore(),
         audio: AudioSessionController? = nil,
-        engine: NativeLazyFlowEngine = NativeLazyFlowEngine()
+        engine: NativeLazyFlowEngine = NativeLazyFlowEngine(),
+        settings: ProcessingSettings? = nil,
+        history: HistoryStore? = nil
     ) {
         self.store = store
         self.audio = audio ?? AudioSessionController()
         self.engine = engine
+        self.settings = settings ?? ProcessingSettings()
+        self.history = history ?? HistoryStore()
         let snapshot = store.snapshot()
         phase = snapshot.isSessionActive ? snapshot.phase : .off
         tone = snapshot.tone
@@ -36,7 +57,7 @@ final class DictationSessionController: ObservableObject {
         processingTask?.cancel()
     }
 
-    var isSessionActive: Bool { phase != .off }
+    var isSessionActive: Bool { phase != .off && phase != .failed }
     var isRecording: Bool { phase == .recording }
     var hasSharedContainer: Bool { store.hasSharedContainer }
 
@@ -52,6 +73,14 @@ final class DictationSessionController: ObservableObject {
 
     func startSession() async {
         guard phase == .off || phase == .failed else { return }
+        guard hasSharedContainer else {
+            fail(with: DictationSessionError.unavailableAppGroup)
+            return
+        }
+        guard !settings.needsGroqKey || settings.hasGroqKey else {
+            fail(with: DictationSessionError.missingGroqKey)
+            return
+        }
         phase = .preparing
         errorMessage = ""
         store.setPhase(.preparing, renewSession: true)
@@ -104,6 +133,8 @@ final class DictationSessionController: ObservableObject {
         processedCommandID = snapshot.commandID
 
         switch snapshot.command {
+        case .beginSession:
+            Task { await startSession() }
         case .start:
             beginUtterance()
         case .stop:
@@ -135,17 +166,20 @@ final class DictationSessionController: ObservableObject {
             phase = .processing
             store.setPhase(.processing, renewSession: true)
             let selectedTone = tone
+            let configuration = settings.configuration()
             processingTask = Task { [weak self] in
                 guard let self else { return }
                 defer { try? FileManager.default.removeItem(at: url) }
                 do {
-                    let text = try await engine.transcribeAndRefine(
+                    let result = try await engine.transcribeAndRefine(
                         recordingAt: url,
-                        tone: selectedTone
+                        tone: selectedTone,
+                        configuration: configuration
                     )
                     guard !Task.isCancelled else { return }
+                    history.add(result, tone: selectedTone)
                     phase = .resultReady
-                    store.publish(text)
+                    store.publish(result.finalText)
                 } catch is CancellationError {
                     return
                 } catch {

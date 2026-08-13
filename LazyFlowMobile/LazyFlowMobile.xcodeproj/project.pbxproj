@@ -12,13 +12,22 @@
 		24E2236CAB8F2F1C80AAA85C /* MobileTone.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CB0F4586C7E9C4129A7E5FA /* MobileTone.swift */; };
 		392C5C1A3D57B83D5BB06DB2 /* NativeLazyFlowEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0D8B05A46D1ACE407DAF2D4 /* NativeLazyFlowEngine.swift */; };
 		3C251B9060CC042B36BFF915 /* ActivityGlyph in Frameworks */ = {isa = PBXBuildFile; productRef = 52F24ABC00DFC0A64030AD91 /* ActivityGlyph */; };
+		48D7036C40AF816D796C3881 /* KeyboardRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F9F15D4A9D7EACDA709BDD4 /* KeyboardRootView.swift */; };
 		5CD01D6B0756DA10CB67320B /* KeyboardModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D45C6E02EFAE2A26FE68C96 /* KeyboardModel.swift */; };
 		6079E537B3DCD653588E6843 /* AudioSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5608A2264B4040E07EC5CF84 /* AudioSessionController.swift */; };
+		632F9F2CC9A30C0C33ADE19F /* HistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FE6BF8D7B565A6C09AB35B2 /* HistoryStore.swift */; };
+		6436199B14813538343B9154 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A62C8F45CD70722B64F565B /* HistoryView.swift */; };
+		72D2BB259705ED980EC9FA9C /* ProcessingPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 782BA8B56A69D5602B3034C3 /* ProcessingPreferences.swift */; };
+		73D877C79F85E9030FF1F744 /* KeyboardModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D45C6E02EFAE2A26FE68C96 /* KeyboardModel.swift */; };
 		7C0A764767F4735BD6B7318E /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC6B4FF0355217DAEB96CB60 /* RootView.swift */; };
 		8B62057E8C0AEF9A3D959A95 /* LazyFlowMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 732471634C48941DDF3CAD48 /* LazyFlowMobileApp.swift */; };
 		92DE94FB67DFE846F43D1363 /* ActivityGlyph in Frameworks */ = {isa = PBXBuildFile; productRef = D6E992E4B891664EB14C4CBD /* ActivityGlyph */; };
 		9B3C873B47C27DA5E7A31EC4 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D80F0ED289A01C4E900CE6E4 /* OnboardingView.swift */; };
+		A4D358D7CE25A0438C1ED827 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6F658D6356C388751291E8A /* SettingsView.swift */; };
+		AB52F6B8AF184D50A2D1747C /* ProcessingSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C5C513A9DF091FD950A0129 /* ProcessingSettings.swift */; };
 		ADF695380D2E819A8A3D22A3 /* TonePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 795C4F7551B45A0097375B76 /* TonePicker.swift */; };
+		AEB42079763EFA68E70C8ADF /* ProcessingPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 782BA8B56A69D5602B3034C3 /* ProcessingPreferences.swift */; };
+		B0117901DD6BDBA68307EB28 /* MobileKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6978406AD12F87A5749692C2 /* MobileKeychain.swift */; };
 		BFD498F834D755A1B1FB1131 /* KeyboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E82C51E23E3C02D31DAC7AF0 /* KeyboardViewController.swift */; };
 		D124493CB6CD5A9F25D54086 /* FlowWaveform.swift in Sources */ = {isa = PBXBuildFile; fileRef = E569E174AADFAAD346DF0945 /* FlowWaveform.swift */; };
 		D4386FD75499137233E567A3 /* DictationSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB4DA514BD33106D87D765C /* DictationSessionController.swift */; };
@@ -28,6 +37,7 @@
 		F5050DF37300EA44555EEC2C /* KeyboardRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F9F15D4A9D7EACDA709BDD4 /* KeyboardRootView.swift */; };
 		F8D8FE7E93487DB3BE412D0F /* DictationContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9664EBC8540A216654508371 /* DictationContract.swift */; };
 		F9DEA8DD1397A8F6D8695545 /* DictationContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9664EBC8540A216654508371 /* DictationContract.swift */; };
+		FC96B42CF0E86A2B0A2E1F29 /* GroqService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BB8092F3C6654C453155834 /* GroqService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -62,20 +72,27 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0FE6BF8D7B565A6C09AB35B2 /* HistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryStore.swift; sourceTree = "<group>"; };
 		1CB0F4586C7E9C4129A7E5FA /* MobileTone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileTone.swift; sourceTree = "<group>"; };
+		2A62C8F45CD70722B64F565B /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
 		3D45C6E02EFAE2A26FE68C96 /* KeyboardModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardModel.swift; sourceTree = "<group>"; };
 		446CFC6FE5B683E6AA0BE76A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		5608A2264B4040E07EC5CF84 /* AudioSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioSessionController.swift; sourceTree = "<group>"; };
+		5BB8092F3C6654C453155834 /* GroqService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroqService.swift; sourceTree = "<group>"; };
 		5F9F15D4A9D7EACDA709BDD4 /* KeyboardRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardRootView.swift; sourceTree = "<group>"; };
 		608E9D21709DA0D384E54E0E /* LazyFlowMobileTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = LazyFlowMobileTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		6978406AD12F87A5749692C2 /* MobileKeychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileKeychain.swift; sourceTree = "<group>"; };
 		6E954652D90BE14003357A93 /* LazyFlowKeyboard.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LazyFlowKeyboard.entitlements; sourceTree = "<group>"; };
 		732471634C48941DDF3CAD48 /* LazyFlowMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LazyFlowMobileApp.swift; sourceTree = "<group>"; };
+		782BA8B56A69D5602B3034C3 /* ProcessingPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessingPreferences.swift; sourceTree = "<group>"; };
 		795C4F7551B45A0097375B76 /* TonePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TonePicker.swift; sourceTree = "<group>"; };
 		7BE737BCD3F727BB4226DF1E /* LazyFlowMobile.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LazyFlowMobile.entitlements; sourceTree = "<group>"; };
 		9664EBC8540A216654508371 /* DictationContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationContract.swift; sourceTree = "<group>"; };
+		9C5C513A9DF091FD950A0129 /* ProcessingSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessingSettings.swift; sourceTree = "<group>"; };
 		A14A1C372E471617B9E923AC /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		B6B5F8D9F5BFF4688ADDD0EF /* LazyFlowMobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = LazyFlowMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C462051EC77E096813670E9A /* MobileContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileContractTests.swift; sourceTree = "<group>"; };
+		C6F658D6356C388751291E8A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		CC6B4FF0355217DAEB96CB60 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		CDB4DA514BD33106D87D765C /* DictationSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationSessionController.swift; sourceTree = "<group>"; };
 		D0D8B05A46D1ACE407DAF2D4 /* NativeLazyFlowEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeLazyFlowEngine.swift; sourceTree = "<group>"; };
@@ -112,6 +129,7 @@
 				9664EBC8540A216654508371 /* DictationContract.swift */,
 				E569E174AADFAAD346DF0945 /* FlowWaveform.swift */,
 				1CB0F4586C7E9C4129A7E5FA /* MobileTone.swift */,
+				782BA8B56A69D5602B3034C3 /* ProcessingPreferences.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -127,8 +145,10 @@
 		1229D197290316B8841A5E1B /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				2A62C8F45CD70722B64F565B /* HistoryView.swift */,
 				D80F0ED289A01C4E900CE6E4 /* OnboardingView.swift */,
 				CC6B4FF0355217DAEB96CB60 /* RootView.swift */,
+				C6F658D6356C388751291E8A /* SettingsView.swift */,
 				795C4F7551B45A0097375B76 /* TonePicker.swift */,
 			);
 			path = Views;
@@ -183,7 +203,11 @@
 			children = (
 				5608A2264B4040E07EC5CF84 /* AudioSessionController.swift */,
 				CDB4DA514BD33106D87D765C /* DictationSessionController.swift */,
+				5BB8092F3C6654C453155834 /* GroqService.swift */,
+				0FE6BF8D7B565A6C09AB35B2 /* HistoryStore.swift */,
+				6978406AD12F87A5749692C2 /* MobileKeychain.swift */,
 				D0D8B05A46D1ACE407DAF2D4 /* NativeLazyFlowEngine.swift */,
+				9C5C513A9DF091FD950A0129 /* ProcessingSettings.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -324,11 +348,20 @@
 				F9DEA8DD1397A8F6D8695545 /* DictationContract.swift in Sources */,
 				D4386FD75499137233E567A3 /* DictationSessionController.swift in Sources */,
 				D124493CB6CD5A9F25D54086 /* FlowWaveform.swift in Sources */,
+				FC96B42CF0E86A2B0A2E1F29 /* GroqService.swift in Sources */,
+				632F9F2CC9A30C0C33ADE19F /* HistoryStore.swift in Sources */,
+				6436199B14813538343B9154 /* HistoryView.swift in Sources */,
+				73D877C79F85E9030FF1F744 /* KeyboardModel.swift in Sources */,
+				48D7036C40AF816D796C3881 /* KeyboardRootView.swift in Sources */,
 				8B62057E8C0AEF9A3D959A95 /* LazyFlowMobileApp.swift in Sources */,
+				B0117901DD6BDBA68307EB28 /* MobileKeychain.swift in Sources */,
 				186CAE7125FA66E6BF1ABE45 /* MobileTone.swift in Sources */,
 				392C5C1A3D57B83D5BB06DB2 /* NativeLazyFlowEngine.swift in Sources */,
 				9B3C873B47C27DA5E7A31EC4 /* OnboardingView.swift in Sources */,
+				AEB42079763EFA68E70C8ADF /* ProcessingPreferences.swift in Sources */,
+				AB52F6B8AF184D50A2D1747C /* ProcessingSettings.swift in Sources */,
 				7C0A764767F4735BD6B7318E /* RootView.swift in Sources */,
+				A4D358D7CE25A0438C1ED827 /* SettingsView.swift in Sources */,
 				ADF695380D2E819A8A3D22A3 /* TonePicker.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -351,6 +384,7 @@
 				F5050DF37300EA44555EEC2C /* KeyboardRootView.swift in Sources */,
 				BFD498F834D755A1B1FB1131 /* KeyboardViewController.swift in Sources */,
 				24E2236CAB8F2F1C80AAA85C /* MobileTone.swift in Sources */,
+				72D2BB259705ED980EC9FA9C /* ProcessingPreferences.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

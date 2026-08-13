@@ -6,8 +6,11 @@ struct RootView: View {
     @ObservedObject var session: DictationSessionController
 
     @AppStorage("hasCompletedMobileOnboarding") private var hasCompletedOnboarding = false
-    @Environment(\.scenePhase) private var scenePhase
     @State private var showingSetup = false
+    @State private var selectedTab = 0
+#if DEBUG
+    @State private var showingKeyboardPreview = false
+#endif
 
     var body: some View {
         Group {
@@ -27,17 +30,79 @@ struct RootView: View {
             KeyboardSetupView()
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
+                .presentationContentInteraction(.scrolls)
         }
+#if DEBUG
+        .sheet(isPresented: $showingKeyboardPreview) {
+            KeyboardPreviewHost()
+                .presentationDetents([.height(290)])
+                .presentationDragIndicator(.visible)
+        }
+#endif
+        .onOpenURL { url in
+            guard url.scheme == "lazyflow" else { return }
+            switch url.host {
+            case "talk":
+                selectedTab = 0
+            case "start":
+                selectedTab = 0
+                Task { await session.startSession() }
+            case "history":
+                selectedTab = 1
+            case "settings":
+                selectedTab = 2
+            case "setup":
+                selectedTab = 2
+                showingSetup = true
+#if DEBUG
+            case "keyboard-preview":
+                showingKeyboardPreview = true
+#endif
+            default:
+                break
+            }
+        }
+#if DEBUG
+        .task {
+            let arguments = ProcessInfo.processInfo.arguments
+            if arguments.contains("-showKeyboardPreview") {
+                showingKeyboardPreview = true
+            }
+            if arguments.contains("-showKeyboardSetup") {
+                showingSetup = true
+            }
+        }
+#endif
     }
 
     private var mainContent: some View {
+        TabView(selection: $selectedTab) {
+            dictationContent
+                .tag(0)
+                .tabItem { Label("Talk", systemImage: "waveform") }
+
+            HistoryView(store: session.history)
+                .tag(1)
+                .tabItem { Label("History", systemImage: "clock.arrow.circlepath") }
+
+            SettingsView(
+                settings: session.settings,
+                hasSharedContainer: session.hasSharedContainer,
+                showKeyboardSetup: { showingSetup = true }
+            )
+            .tag(2)
+            .tabItem { Label("Settings", systemImage: "gearshape") }
+        }
+        .tint(session.tone.tint)
+    }
+
+    private var dictationContent: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 18) {
                     header
                     sessionCard
                     toneCard
-                    setupCard
                     privacyNote
                 }
                 .padding(.horizontal, 18)
@@ -58,16 +123,15 @@ struct RootView: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Button {
-                showingSetup = true
-            } label: {
-                Image(systemName: "gearshape")
-                    .font(.body.weight(.semibold))
-                    .frame(width: 42, height: 42)
-                    .background(.thinMaterial, in: Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Keyboard setup")
+            Label(
+                session.settings.transcriptionProvider == .apple ? "On device" : "Groq",
+                systemImage: session.settings.transcriptionProvider == .apple ? "iphone" : "cloud"
+            )
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 12)
+            .frame(height: 34)
+            .background(.thinMaterial, in: Capsule())
         }
         .padding(.top, 12)
     }
@@ -77,7 +141,7 @@ struct RootView: View {
             ZStack {
                 Circle()
                     .fill(statusTint.opacity(0.10))
-                    .frame(width: 120, height: 120)
+                    .frame(width: 108, height: 108)
                     .scaleEffect(session.isRecording ? 1.08 : 1)
                     .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: session.isRecording)
 
@@ -128,11 +192,16 @@ struct RootView: View {
             .sensoryFeedback(.impact(weight: .medium), trigger: session.isSessionActive)
 
             if session.phase == .failed {
-                Button("Try again") { Task { await session.retry() } }
-                    .font(.subheadline.weight(.semibold))
+                HStack(spacing: 18) {
+                    Button("Try again") { Task { await session.retry() } }
+                    if session.settings.needsGroqKey && !session.settings.hasGroqKey {
+                        Button("Open Settings") { selectedTab = 2 }
+                    }
+                }
+                .font(.subheadline.weight(.semibold))
             }
         }
-        .padding(24)
+        .padding(22)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 30, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 30, style: .continuous)
@@ -157,40 +226,11 @@ struct RootView: View {
         .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
-    private var setupCard: some View {
-        Button {
-            showingSetup = true
-        } label: {
-            HStack(spacing: 14) {
-                Image(systemName: "keyboard.badge.ellipsis")
-                    .font(.title2)
-                    .foregroundStyle(Color.accentColor)
-                    .frame(width: 40, height: 40)
-                    .background(Color.accentColor.opacity(0.11), in: RoundedRectangle(cornerRadius: 12))
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Set up the keyboard")
-                        .font(.headline)
-                    Text("Add LazyFlow and allow Full Access")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .padding(18)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-    }
-
     private var privacyNote: some View {
         Label(
             session.isSessionActive
                 ? "The microphone remains active while this session is on. iOS shows its orange privacy indicator."
-                : "On-device transcription and rewriting. No account or API key.",
+                : privacySummary,
             systemImage: session.isSessionActive ? "mic.badge.plus" : "lock.shield"
         )
         .font(.caption)
@@ -227,10 +267,10 @@ struct RootView: View {
     private var statusDetail: String {
         switch session.phase {
         case .off: "Start a session, then switch to LazyFlow from any text field."
-        case .preparing: "Getting the on-device speech model and microphone ready."
+        case .preparing: "Getting the microphone and selected speech model ready."
         case .ready: "You can leave this app. Tap the mic from the LazyFlow keyboard."
         case .recording: "Speak naturally. Tap stop in the keyboard when you’re done."
-        case .processing: "Transcribing and applying your \(session.tone.title.lowercased()) tone on device."
+        case .processing: "Transcribing and applying your \(session.tone.title.lowercased()) tone."
         case .resultReady: "Your words will appear at the cursor."
         case .failed: session.errorMessage
         }
@@ -243,7 +283,7 @@ struct RootView: View {
         case .preparing: .focus
         case .resultReady: .resolve
         case .failed: .pulse
-        case .off, .ready: .weave
+        case .off, .ready: .pulse
         }
     }
 
@@ -264,7 +304,31 @@ struct RootView: View {
         default: ActivityGlyphColor(hex: 0x2875FA)
         }
     }
+
+    private var privacySummary: String {
+        session.settings.needsGroqKey
+            ? "Cloud is enabled for selected processing steps. History stays on this iPhone."
+            : "On-device transcription and rewriting. No account or API key."
+    }
 }
+
+#if DEBUG
+private struct KeyboardPreviewHost: View {
+    @StateObject private var model = KeyboardModel(
+        hasFullAccess: true,
+        sharedContainerAvailable: true,
+        insertText: { _ in }
+    )
+
+    var body: some View {
+        KeyboardRootView(
+            model: model,
+            nextKeyboard: {},
+            openLazyFlow: {}
+        )
+    }
+}
+#endif
 
 private struct SessionActionButtonStyle: ButtonStyle {
     let active: Bool
@@ -287,20 +351,22 @@ private struct KeyboardSetupView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: 24) {
-                setupStep(1, title: "Add the keyboard", detail: "Open Settings › General › Keyboard › Keyboards › Add New Keyboard, then choose LazyFlow.")
-                setupStep(2, title: "Allow Full Access", detail: "Full Access lets the keyboard exchange commands and finished text with the LazyFlow app. Audio never enters the keyboard extension.")
-                setupStep(3, title: "Start a voice session", detail: "Return here and start a session. In any text field, hold the globe and choose LazyFlow.")
+            ScrollView {
+                VStack(alignment: .leading, spacing: 26) {
+                    setupStep(1, title: "Add the keyboard", detail: "Open Settings › General › Keyboard › Keyboards › Add New Keyboard, then choose LazyFlow.")
+                    setupStep(2, title: "Allow Full Access", detail: "Full Access lets the keyboard exchange commands and finished text with the LazyFlow app. Audio never enters the keyboard extension.")
+                    setupStep(3, title: "Start a voice session", detail: "Return here and start a session. In any text field, hold the globe and choose LazyFlow.")
 
-                Button("Open Settings") {
-                    guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
-                    UIApplication.shared.open(url)
+                    Button("Open Settings") {
+                        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                        UIApplication.shared.open(url)
+                    }
+                    .buttonStyle(PrimaryActionButtonStyle())
                 }
-                .buttonStyle(PrimaryActionButtonStyle())
-
-                Spacer()
+                .padding(.horizontal, 22)
+                .padding(.top, 18)
+                .padding(.bottom, 42)
             }
-            .padding(22)
             .navigationTitle("Keyboard setup")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

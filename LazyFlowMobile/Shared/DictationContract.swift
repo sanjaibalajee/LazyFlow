@@ -12,6 +12,7 @@ enum DictationPhase: String, Codable, Sendable {
 
 enum DictationCommand: String, Codable, Sendable {
     case none
+    case beginSession
     case start
     case stop
     case cancel
@@ -30,7 +31,7 @@ struct DictationSnapshot: Equatable, Sendable {
     var sessionExpiresAt: Date?
 
     var isSessionActive: Bool {
-        guard phase != .off else { return false }
+        guard phase != .off, phase != .failed else { return false }
         guard let sessionExpiresAt else { return true }
         return sessionExpiresAt > Date()
     }

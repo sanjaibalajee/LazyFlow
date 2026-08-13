@@ -18,19 +18,65 @@ enum NativeLazyFlowError: LocalizedError {
 }
 
 struct NativeLazyFlowEngine {
+    private let groq = GroqService()
+
     func transcribeAndRefine(
         recordingAt url: URL,
         tone: MobileTone,
+        configuration: ProcessingConfiguration,
         locale: Locale = .autoupdatingCurrent
-    ) async throws -> String {
-        let transcript = try await transcribe(recordingAt: url, locale: locale)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !transcript.isEmpty else { throw NativeLazyFlowError.emptyTranscript }
-        guard tone != .verbatim else { return transcript }
-        return await refine(transcript, tone: tone)
+    ) async throws -> ProcessingResult {
+        let transcript: String
+        let transcriptionLabel: String
+        switch configuration.transcriptionProvider {
+        case .apple:
+            transcript = try await transcribeOnDevice(recordingAt: url, locale: locale)
+            transcriptionLabel = "Apple SpeechAnalyzer"
+        case .groq:
+            transcript = try await groq.transcribe(
+                recordingAt: url,
+                apiKey: configuration.groqAPIKey,
+                model: configuration.speechModel
+            )
+            transcriptionLabel = configuration.speechModel.title
+        }
+
+        let trimmedTranscript = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTranscript.isEmpty else { throw NativeLazyFlowError.emptyTranscript }
+
+        if tone == .verbatim {
+            return ProcessingResult(
+                transcript: trimmedTranscript,
+                finalText: trimmedTranscript,
+                transcriptionLabel: transcriptionLabel,
+                rewriteLabel: "None · Verbatim"
+            )
+        }
+
+        let finalText: String
+        let rewriteLabel: String
+        switch configuration.rewriteProvider {
+        case .apple:
+            (finalText, rewriteLabel) = await refineOnDevice(trimmedTranscript, tone: tone)
+        case .groq:
+            finalText = try await groq.refine(
+                trimmedTranscript,
+                tone: tone,
+                apiKey: configuration.groqAPIKey,
+                model: configuration.rewriteModel
+            )
+            rewriteLabel = configuration.rewriteModel.title
+        }
+
+        return ProcessingResult(
+            transcript: trimmedTranscript,
+            finalText: finalText,
+            transcriptionLabel: transcriptionLabel,
+            rewriteLabel: rewriteLabel
+        )
     }
 
-    private func transcribe(recordingAt url: URL, locale: Locale) async throws -> String {
+    private func transcribeOnDevice(recordingAt url: URL, locale: Locale) async throws -> String {
         guard let supportedLocale = await SpeechTranscriber.supportedLocale(equivalentTo: locale) else {
             throw NativeLazyFlowError.unsupportedLocale
         }
@@ -59,10 +105,15 @@ struct NativeLazyFlowEngine {
         return try await transcription
     }
 
-    private func refine(_ transcript: String, tone: MobileTone) async -> String {
+    private func refineOnDevice(
+        _ transcript: String,
+        tone: MobileTone
+    ) async -> (text: String, label: String) {
         let fallback = deterministicCleanup(transcript)
         let model = SystemLanguageModel.default
-        guard case .available = model.availability else { return fallback }
+        guard case .available = model.availability else {
+            return (fallback, "Local cleanup")
+        }
 
         let session = LanguageModelSession(
             model: model,
@@ -71,9 +122,9 @@ struct NativeLazyFlowEngine {
         do {
             let response = try await session.respond(to: transcript)
             let output = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
-            return output.isEmpty ? fallback : output
+            return (output.isEmpty ? fallback : output, "Apple Foundation Models")
         } catch {
-            return fallback
+            return (fallback, "Local cleanup")
         }
     }
 

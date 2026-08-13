@@ -157,7 +157,7 @@ private final class AudioFileSink: @unchecked Sendable {
 
         let destination = FileManager.default.temporaryDirectory
             .appendingPathComponent("lazyflow-\(UUID().uuidString)")
-            .appendingPathExtension("caf")
+            .appendingPathExtension("wav")
         file = try AVAudioFile(forWriting: destination, settings: format.settings)
         url = destination
     }

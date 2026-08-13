@@ -34,6 +34,8 @@ targets:
       - path: App
       - path: Shared
       - path: Resources
+      - path: Keyboard/KeyboardModel.swift
+      - path: Keyboard/KeyboardRootView.swift
     dependencies:
       - target: LazyFlowKeyboard
         embed: true

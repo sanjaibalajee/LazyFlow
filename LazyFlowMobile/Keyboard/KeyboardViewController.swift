@@ -19,6 +19,19 @@ final class KeyboardViewController: UIInputViewController {
             model: model,
             nextKeyboard: { [weak self] in
                 self?.advanceToNextInputMode()
+            },
+            openLazyFlow: { [weak self, weak model] in
+                model?.prepareAppHandoff()
+                guard let url = URL(string: "lazyflow://start"),
+                      let context = self?.extensionContext else {
+                    model?.completeAppHandoff(opened: false)
+                    return
+                }
+                context.open(url) { opened in
+                    Task { @MainActor in
+                        model?.completeAppHandoff(opened: opened)
+                    }
+                }
             }
         )
         let host = UIHostingController(rootView: root)
@@ -35,7 +48,7 @@ final class KeyboardViewController: UIInputViewController {
         ])
         host.didMove(toParent: self)
 
-        let heightConstraint = view.heightAnchor.constraint(equalToConstant: 232)
+        let heightConstraint = view.heightAnchor.constraint(equalToConstant: 258)
         heightConstraint.priority = .defaultHigh
         heightConstraint.isActive = true
 
@@ -51,6 +64,6 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
         super.viewWillTransition(to: size, with: coordinator)
-        heightConstraint?.constant = size.width > size.height ? 190 : 232
+        heightConstraint?.constant = size.width > size.height ? 210 : 258
     }
 }

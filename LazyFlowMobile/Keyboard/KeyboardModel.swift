@@ -5,20 +5,27 @@ import SwiftUI
 final class KeyboardModel: ObservableObject {
     @Published private(set) var snapshot: DictationSnapshot
     @Published private(set) var hasFullAccess: Bool
+    @Published private(set) var hasSharedContainer: Bool
+    @Published private(set) var handoffMessage = ""
+    @Published private(set) var isOpeningApp = false
 
     private let store: SharedDictationStore
     private let insertText: (String) -> Void
+    private let sharedContainerOverride: Bool?
     private var lastResultID = ""
     private var monitorTask: Task<Void, Never>?
 
     init(
         hasFullAccess: Bool,
         store: SharedDictationStore = SharedDictationStore(),
+        sharedContainerAvailable: Bool? = nil,
         insertText: @escaping (String) -> Void
     ) {
         self.hasFullAccess = hasFullAccess
         self.store = store
+        sharedContainerOverride = sharedContainerAvailable
         self.insertText = insertText
+        hasSharedContainer = sharedContainerAvailable ?? store.hasSharedContainer
         snapshot = store.snapshot()
         lastResultID = snapshot.resultID
         startMonitoring()
@@ -28,6 +35,7 @@ final class KeyboardModel: ObservableObject {
 
     func updateFullAccess(_ value: Bool) {
         hasFullAccess = value
+        hasSharedContainer = sharedContainerOverride ?? store.hasSharedContainer
     }
 
     func selectTone(_ tone: MobileTone) {
@@ -52,6 +60,19 @@ final class KeyboardModel: ObservableObject {
 
     func endSession() {
         store.request(.endSession)
+    }
+
+    func prepareAppHandoff() {
+        handoffMessage = ""
+        isOpeningApp = true
+        store.request(.beginSession)
+    }
+
+    func completeAppHandoff(opened: Bool) {
+        isOpeningApp = false
+        if !opened {
+            handoffMessage = "iOS couldn’t open LazyFlow from this keyboard. Open the app once, start a voice session, then come back."
+        }
     }
 
     private func startMonitoring() {

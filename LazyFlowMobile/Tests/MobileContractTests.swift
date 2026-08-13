@@ -45,4 +45,34 @@ final class MobileContractTests: XCTestCase {
             XCTAssertTrue(tone.editingInstructions.contains("Preserve the speaker's meaning"))
         }
     }
+
+    @MainActor
+    func testHistoryPersistsProcessingMetadata() {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("LazyFlowHistory-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+
+        let store = HistoryStore(fileURL: fileURL)
+        store.add(
+            ProcessingResult(
+                transcript: "hello there",
+                finalText: "Hello there.",
+                transcriptionLabel: "Whisper Large V3 Turbo",
+                rewriteLabel: "GPT-OSS 20B"
+            ),
+            tone: .clean
+        )
+
+        let reloaded = HistoryStore(fileURL: fileURL)
+        XCTAssertEqual(reloaded.entries.count, 1)
+        XCTAssertEqual(reloaded.entries.first?.finalText, "Hello there.")
+        XCTAssertEqual(reloaded.entries.first?.rewriteLabel, "GPT-OSS 20B")
+    }
+
+    func testGroqModelIdentifiersMatchProductionEndpoints() {
+        XCTAssertEqual(GroqSpeechModel.turbo.rawValue, "whisper-large-v3-turbo")
+        XCTAssertEqual(GroqSpeechModel.accurate.rawValue, "whisper-large-v3")
+        XCTAssertEqual(GroqRewriteModel.fast.rawValue, "openai/gpt-oss-20b")
+        XCTAssertEqual(GroqRewriteModel.quality.rawValue, "openai/gpt-oss-120b")
+    }
 }
