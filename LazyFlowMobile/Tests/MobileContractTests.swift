@@ -75,4 +75,14 @@ final class MobileContractTests: XCTestCase {
         XCTAssertEqual(GroqRewriteModel.fast.rawValue, "openai/gpt-oss-20b")
         XCTAssertEqual(GroqRewriteModel.quality.rawValue, "openai/gpt-oss-120b")
     }
+
+    func testKeychainRoundTrip() throws {
+        let account = "test_\(UUID().uuidString)"
+        defer { try? MobileKeychain.delete(for: account) }
+
+        try MobileKeychain.save("gsk_test_value", for: account)
+        XCTAssertEqual(MobileKeychain.load(for: account), "gsk_test_value")
+        try MobileKeychain.delete(for: account)
+        XCTAssertNil(MobileKeychain.load(for: account))
+    }
 }

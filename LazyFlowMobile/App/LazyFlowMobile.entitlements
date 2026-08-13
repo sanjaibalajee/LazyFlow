@@ -6,5 +6,9 @@
 	<array>
 		<string>group.com.fanpit.LazyFlow</string>
 	</array>
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)com.fanpit.LazyFlowMobile</string>
+	</array>
 </dict>
 </plist>

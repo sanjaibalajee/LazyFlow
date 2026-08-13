@@ -27,6 +27,8 @@ Groq is optional and can be selected independently for either stage:
 
 Add a Groq API key under **LazyFlow > Settings > Groq**. The key is verified before saving and stored in the iPhone Keychain with device-only accessibility. It is never copied into App Group defaults, the keyboard extension, or dictation history.
 
+The app target declares its own Keychain access group. Unsigned Simulator builds cannot receive that signing entitlement, so debug Simulator builds use a protected, app-sandboxed file fallback; device builds never use that fallback.
+
 Finished dictations are available from the History tab. History is stored locally with complete file protection and records the selected tone and processing models.
 
 ## Requirements
