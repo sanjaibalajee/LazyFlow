@@ -99,7 +99,7 @@ struct RootView: View {
     private var dictationContent: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 18) {
+                VStack(spacing: 20) {
                     header
                     sessionCard
                     toneCard
@@ -129,36 +129,30 @@ struct RootView: View {
             )
             .font(.caption.weight(.semibold))
             .foregroundStyle(.secondary)
-            .padding(.horizontal, 12)
-            .frame(height: 34)
-            .background(.thinMaterial, in: Capsule())
         }
         .padding(.top, 12)
     }
 
     private var sessionCard: some View {
-        VStack(spacing: 20) {
-            ZStack {
-                Circle()
-                    .fill(statusTint.opacity(0.10))
-                    .frame(width: 108, height: 108)
-                    .scaleEffect(session.isRecording ? 1.08 : 1)
-                    .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: session.isRecording)
-
-                ActivityGlyph(
-                    style: glyphStyle,
-                    size: .standard,
-                    speed: session.isRecording ? 1.15 : 0.85,
-                    paused: session.phase == .off || session.phase == .ready,
-                    palette: .tint(glyphColor),
-                    accessibilityLabel: statusTitle
-                )
-            }
+        VStack(spacing: 18) {
+            ActivityGlyph(
+                style: glyphStyle,
+                size: .standard,
+                speed: session.isRecording ? 1.15 : 0.78,
+                paused: false,
+                palette: .tint(glyphColor),
+                accessibilityLabel: statusTitle
+            )
+            .id(glyphStyle)
+            .scaleEffect(session.isRecording ? 1.14 : 1)
+            .frame(height: 88)
+            .transition(.scale.combined(with: .opacity))
+            .animation(.smooth(duration: 0.45), value: session.phase)
 
             VStack(spacing: 7) {
                 Text(statusTitle)
                     .font(.system(.title2, design: .rounded, weight: .bold))
-                    .contentTransition(.numericText())
+                    .contentTransition(.opacity)
                 Text(statusDetail)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -201,12 +195,8 @@ struct RootView: View {
                 .font(.subheadline.weight(.semibold))
             }
         }
-        .padding(22)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 30, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.055))
-        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 14)
     }
 
     private var toneCard: some View {
@@ -222,8 +212,7 @@ struct RootView: View {
             }
             TonePicker(selection: $session.tone)
         }
-        .padding(18)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .padding(.horizontal, 4)
     }
 
     private var privacyNote: some View {
@@ -240,12 +229,17 @@ struct RootView: View {
 
     private var background: some View {
         ZStack {
-            Color(.systemGroupedBackground)
+            Color(.systemBackground)
             RadialGradient(
-                colors: [statusTint.opacity(0.10), .clear],
+                colors: [statusTint.opacity(0.12), .clear],
                 center: .topTrailing,
                 startRadius: 10,
                 endRadius: 320
+            )
+            LinearGradient(
+                colors: [Color.clear, statusTint.opacity(0.035)],
+                startPoint: .center,
+                endPoint: .bottomLeading
             )
         }
         .ignoresSafeArea()
@@ -283,7 +277,8 @@ struct RootView: View {
         case .preparing: .focus
         case .resultReady: .resolve
         case .failed: .pulse
-        case .off, .ready: .pulse
+        case .ready: .signal
+        case .off: .pulse
         }
     }
 
@@ -337,11 +332,16 @@ private struct SessionActionButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.headline)
-            .foregroundStyle(active ? tint : .white)
+            .foregroundStyle(tint)
             .frame(maxWidth: .infinity)
             .frame(height: 54)
-            .background(active ? tint.opacity(0.12) : tint, in: RoundedRectangle(cornerRadius: 17, style: .continuous))
+            .contentShape(Capsule())
+            .glassEffect(
+                .regular.tint(tint.opacity(active ? 0.10 : 0.16)).interactive(),
+                in: Capsule()
+            )
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .opacity(configuration.isPressed ? 0.84 : 1)
             .animation(.snappy(duration: 0.2), value: configuration.isPressed)
     }
 }

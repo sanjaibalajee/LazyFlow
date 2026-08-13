@@ -7,24 +7,30 @@ struct KeyboardRootView: View {
     var openLazyFlow: () -> Void
 
     var body: some View {
-        VStack(spacing: 9) {
+        VStack(spacing: 10) {
             header
 
-            if !model.hasFullAccess {
-                fullAccessMessage
-            } else if model.snapshot.isSessionActive {
-                activeKeyboard
-            } else {
-                inactiveKeyboard
+            Group {
+                if !model.hasFullAccess {
+                    fullAccessMessage
+                } else if model.snapshot.isSessionActive {
+                    activeKeyboard
+                } else {
+                    inactiveKeyboard
+                }
             }
+            .transition(.blurReplace)
         }
         .padding(.horizontal, 12)
-        .padding(.top, 9)
-        .padding(.bottom, 8)
+        .padding(.top, 8)
+        .padding(.bottom, 9)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.systemGroupedBackground))
-        .animation(.smooth(duration: 0.28), value: model.snapshot.phase)
-        .animation(.smooth(duration: 0.28), value: model.hasFullAccess)
+        .background {
+            KeyboardBackdrop(tint: statusTint)
+                .ignoresSafeArea()
+        }
+        .animation(.smooth(duration: 0.36), value: model.snapshot.phase)
+        .animation(.smooth(duration: 0.3), value: model.hasFullAccess)
     }
 
     private var header: some View {
@@ -32,17 +38,22 @@ struct KeyboardRootView: View {
             Button(action: nextKeyboard) {
                 Image(systemName: "globe")
                     .font(.body.weight(.medium))
-                    .frame(width: 40, height: 34)
-                    .background(Color.primary.opacity(0.065), in: RoundedRectangle(cornerRadius: 10))
+                    .frame(width: 36, height: 30)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.glass(.clear.interactive()))
             .accessibilityLabel("Next keyboard")
 
             Spacer()
 
             HStack(spacing: 7) {
-                Image(systemName: "waveform")
-                    .foregroundStyle(model.snapshot.tone.tint)
+                Image(systemName: model.snapshot.phase == .recording ? "waveform" : "waveform.badge.mic")
+                    .foregroundStyle(statusTint)
+                    .contentTransition(.symbolEffect(.replace))
+                    .symbolEffect(
+                        .variableColor.iterative,
+                        options: .repeat(.continuous),
+                        isActive: model.snapshot.phase == .recording
+                    )
                 Text("LazyFlow")
                     .font(.subheadline.weight(.bold))
             }
@@ -52,173 +63,193 @@ struct KeyboardRootView: View {
             Button(action: model.endSession) {
                 Image(systemName: "power")
                     .font(.subheadline.weight(.semibold))
-                    .frame(width: 40, height: 34)
-                    .background(Color.primary.opacity(0.065), in: RoundedRectangle(cornerRadius: 10))
+                    .frame(width: 36, height: 30)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.glass(.clear.interactive()))
             .disabled(!model.snapshot.isSessionActive)
-            .opacity(model.snapshot.isSessionActive ? 1 : 0.28)
+            .opacity(model.snapshot.isSessionActive ? 1 : 0.24)
             .accessibilityLabel("End voice session")
         }
+        .frame(height: 34)
     }
 
     private var inactiveKeyboard: some View {
         VStack(spacing: 10) {
-            HStack(spacing: 12) {
-                ActivityGlyph(
-                    style: .pulse,
-                    size: .inline,
-                    paused: true,
-                    palette: .tint(ActivityGlyphColor(hex: 0x2875FA)),
-                    accessibilityLabel: "Waiting for voice session"
-                )
-                .frame(width: 38, height: 38)
-                .background(Color.accentColor.opacity(0.10), in: Circle())
+            ActivityGlyph(
+                style: .signal,
+                size: .standard,
+                speed: 0.72,
+                paused: false,
+                palette: .tint(ActivityGlyphColor(hex: 0x2875FA)),
+                accessibilityLabel: "Waiting for voice session"
+            )
+            .frame(height: 58)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Start a voice session")
-                        .font(.headline)
-                    Text(model.hasSharedContainer
-                         ? "LazyFlow needs the app to own the microphone"
-                         : "Unsigned build — reinstall LazyFlow from Xcode")
-                        .font(.caption)
-                        .foregroundStyle(model.hasSharedContainer ? Color.secondary : Color.orange)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 0)
+            VStack(spacing: 2) {
+                Text("Start a voice session")
+                    .font(.headline)
+                Text(model.hasSharedContainer
+                     ? "The app listens. This keyboard inserts."
+                     : "Unsigned build — reinstall LazyFlow from Xcode")
+                    .font(.caption)
+                    .foregroundStyle(model.hasSharedContainer ? Color.secondary : Color.orange)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
             }
 
             Button(action: openLazyFlow) {
                 HStack(spacing: 8) {
                     if model.isOpeningApp {
-                        ProgressView().tint(.white)
+                        ProgressView()
+                            .controlSize(.small)
                     } else {
                         Image(systemName: "mic.fill")
                     }
-                    Text("Start talking")
+                    Text(model.isOpeningApp ? "Opening LazyFlow…" : "Start talking")
                 }
                 .font(.headline)
-                .foregroundStyle(.white)
+                .foregroundStyle(Color.accentColor)
                 .frame(maxWidth: .infinity)
-                .frame(height: 48)
-                .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                .frame(height: 44)
+                .contentShape(Capsule())
+                .glassEffect(
+                    .regular.tint(Color.accentColor.opacity(0.14)).interactive(),
+                    in: Capsule()
+                )
             }
             .buttonStyle(KeyboardPressStyle())
             .disabled(model.isOpeningApp)
 
-            if !model.handoffMessage.isEmpty {
-                Text(model.handoffMessage)
-                    .font(.caption2)
-                    .foregroundStyle(.orange)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-            } else {
-                Text("LazyFlow will open. Start the session, then return to your text field.")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
+            Text(handoffCopy)
+                .font(.caption2)
+                .foregroundStyle(model.handoffMessage.isEmpty ? Color.secondary : Color.orange)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
     private var activeKeyboard: some View {
         VStack(spacing: 9) {
             toneStrip
 
-            VStack(spacing: 7) {
-                HStack(spacing: 10) {
-                    statusGlyph
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(statusTitle)
-                            .font(.subheadline.weight(.bold))
-                        Text(statusDetail)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                    Spacer()
-                    if model.snapshot.phase == .recording {
-                        Button("Cancel", action: model.cancel)
-                            .font(.caption.weight(.semibold))
-                    }
-                }
+            HStack(spacing: 10) {
+                statusGlyph
 
-                FlowWaveform(
-                    level: model.snapshot.audioLevel,
-                    isActive: model.snapshot.phase == .recording,
-                    tint: statusTint,
-                    barCount: 38
-                )
-                .frame(height: 24)
-
-                Button(action: model.toggleRecording) {
-                    Label(actionTitle, systemImage: actionSymbol)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(statusTitle)
                         .font(.subheadline.weight(.bold))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 43)
-                        .background(statusTint, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .contentTransition(.opacity)
+                    Text(statusDetail)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
-                .buttonStyle(KeyboardPressStyle())
-                .disabled(!canRecord)
-                .opacity(canRecord ? 1 : 0.55)
+
+                Spacer(minLength: 4)
+
+                if model.snapshot.phase == .recording {
+                    Button("Cancel", action: model.cancel)
+                        .font(.caption.weight(.semibold))
+                        .buttonStyle(.glass(.clear.interactive()))
+                        .transition(.scale.combined(with: .opacity))
+                }
             }
-            .padding(.horizontal, 13)
-            .padding(.vertical, 10)
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .frame(height: 48)
+
+            FlowWaveform(
+                level: model.snapshot.audioLevel,
+                isActive: model.snapshot.phase == .recording,
+                tint: statusTint,
+                barCount: 42
+            )
+            .frame(height: 42)
+
+            Button(action: model.toggleRecording) {
+                Label(actionTitle, systemImage: actionSymbol)
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(statusTint)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 42)
+                    .contentShape(Capsule())
+                    .glassEffect(
+                        .regular.tint(statusTint.opacity(0.14)).interactive(),
+                        in: Capsule()
+                    )
+                    .contentTransition(.symbolEffect(.replace))
+            }
+            .buttonStyle(KeyboardPressStyle())
+            .disabled(!canRecord)
+            .opacity(canRecord ? 1 : 0.5)
+            .accessibilityHint(actionHint)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private var toneStrip: some View {
         ScrollView(.horizontal) {
-            HStack(spacing: 7) {
-                ForEach(MobileTone.allCases) { tone in
-                    Button {
-                        model.selectTone(tone)
-                    } label: {
-                        HStack(spacing: 5) {
-                            Image(systemName: tone.symbol)
-                            Text(tone.compactTitle)
+            GlassEffectContainer(spacing: 8) {
+                HStack(spacing: 8) {
+                    ForEach(MobileTone.allCases) { tone in
+                        let isSelected = model.snapshot.tone == tone
+
+                        Button {
+                            model.selectTone(tone)
+                        } label: {
+                            HStack(spacing: 5) {
+                                Image(systemName: tone.symbol)
+                                Text(tone.compactTitle)
+                            }
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(isSelected ? tone.tint : Color.primary.opacity(0.72))
+                            .padding(.horizontal, 11)
+                            .frame(height: 30)
+                            .contentShape(Capsule())
+                            .glassEffect(
+                                isSelected
+                                    ? .regular.tint(tone.tint.opacity(0.16)).interactive()
+                                    : .clear.interactive(),
+                                in: Capsule()
+                            )
                         }
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(model.snapshot.tone == tone ? .white : .primary)
-                        .padding(.horizontal, 11)
-                        .frame(height: 30)
-                        .background {
-                            Capsule(style: .continuous)
-                                .fill(model.snapshot.tone == tone ? tone.tint : Color.primary.opacity(0.06))
-                        }
+                        .buttonStyle(KeyboardPressStyle())
+                        .accessibilityAddTraits(isSelected ? .isSelected : [])
                     }
-                    .buttonStyle(.plain)
                 }
+                .padding(.vertical, 2)
             }
         }
         .scrollIndicators(.hidden)
+        .contentMargins(.horizontal, 1, for: .scrollContent)
+        .frame(height: 34)
     }
 
     private var statusGlyph: some View {
         ActivityGlyph(
             style: glyphStyle,
-            size: .inline,
-            speed: model.snapshot.phase == .recording ? 1.15 : 0.9,
-            paused: model.snapshot.phase == .ready,
+            size: .standard,
+            speed: model.snapshot.phase == .recording ? 1.12 : 0.82,
+            paused: false,
             palette: .tint(glyphColor),
             accessibilityLabel: statusTitle
         )
-        .frame(width: 34, height: 34)
-        .background(statusTint.opacity(0.10), in: Circle())
+        .id(glyphStyle)
+        .scaleEffect(0.68)
+        .frame(width: 46, height: 46)
+        .transition(.scale.combined(with: .opacity))
     }
 
     private var fullAccessMessage: some View {
-        VStack(spacing: 7) {
-            Image(systemName: "lock.open")
-                .font(.title3)
-                .foregroundStyle(.orange)
+        VStack(spacing: 8) {
+            ActivityGlyph(
+                style: .network,
+                size: .standard,
+                speed: 0.7,
+                palette: .tint(ActivityGlyphColor(hex: 0xE88822)),
+                accessibilityLabel: "Keyboard bridge disconnected"
+            )
+            .frame(height: 58)
+
             Text("Allow Full Access")
                 .font(.headline)
             Text("Enable it for LazyFlow in Keyboard Settings. It is used only for the private app bridge.")
@@ -228,6 +259,13 @@ struct KeyboardRootView: View {
                 .frame(maxWidth: 330)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var handoffCopy: String {
+        if !model.handoffMessage.isEmpty {
+            return model.handoffMessage
+        }
+        return "Start in LazyFlow, then return to your text field."
     }
 
     private var canRecord: Bool {
@@ -252,6 +290,12 @@ struct KeyboardRootView: View {
         case .resultReady: "arrow.turn.down.left"
         default: "mic.fill"
         }
+    }
+
+    private var actionHint: String {
+        model.snapshot.phase == .recording
+            ? "Stops recording and inserts the finished text"
+            : "Starts recording in the LazyFlow app"
     }
 
     private var statusTitle: String {
@@ -290,7 +334,8 @@ struct KeyboardRootView: View {
         case .processing: .compose
         case .preparing: .focus
         case .resultReady: .resolve
-        case .off, .ready, .failed: .pulse
+        case .ready: .signal
+        case .off, .failed: .pulse
         }
     }
 
@@ -304,11 +349,32 @@ struct KeyboardRootView: View {
     }
 }
 
+private struct KeyboardBackdrop: View {
+    var tint: Color
+
+    var body: some View {
+        ZStack {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+
+            LinearGradient(
+                colors: [
+                    tint.opacity(0.08),
+                    Color.clear,
+                    Color(.systemBackground).opacity(0.18)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
+    }
+}
+
 private struct KeyboardPressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.975 : 1)
-            .opacity(configuration.isPressed ? 0.88 : 1)
+            .opacity(configuration.isPressed ? 0.82 : 1)
             .animation(.snappy(duration: 0.18), value: configuration.isPressed)
     }
 }
