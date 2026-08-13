@@ -39,30 +39,8 @@ struct RootView: View {
                 .presentationDragIndicator(.visible)
         }
 #endif
-        .onOpenURL { url in
-            guard url.scheme == "lazyflow" else { return }
-            switch url.host {
-            case "talk":
-                selectedTab = 0
-            case "start":
-                selectedTab = 0
-                Task { await session.startSession() }
-            case "history":
-                selectedTab = 1
-            case "settings":
-                selectedTab = 2
-            case "setup":
-                selectedTab = 2
-                showingSetup = true
-#if DEBUG
-            case "keyboard-preview":
-                showingKeyboardPreview = true
-#endif
-            default:
-                break
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .lazyFlowQuickStart)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .lazyFlowStartSessionRequested)) { _ in
+            KeyboardHandoffDiagnostics.record(.app, "Starting session from notification tap")
             selectedTab = 0
             Task { await session.startSession() }
         }
@@ -313,17 +291,27 @@ struct RootView: View {
 
 #if DEBUG
 private struct KeyboardPreviewHost: View {
-    @StateObject private var model = KeyboardModel(
-        hasFullAccess: true,
-        sharedContainerAvailable: true,
-        insertText: { _ in }
-    )
+    @StateObject private var model: KeyboardModel
+
+    init() {
+        let suiteName = "LazyFlow.KeyboardPreview"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        _model = StateObject(
+            wrappedValue: KeyboardModel(
+                hasFullAccess: true,
+                store: SharedDictationStore(defaults: defaults),
+                sharedContainerAvailable: true,
+                insertText: { _ in }
+            )
+        )
+    }
 
     var body: some View {
         KeyboardRootView(
             model: model,
             nextKeyboard: {},
-            openLazyFlow: {}
+            requestVoiceSession: {}
         )
     }
 }
@@ -359,7 +347,7 @@ private struct KeyboardSetupView: View {
                 VStack(alignment: .leading, spacing: 26) {
                     setupStep(1, title: "Add the keyboard", detail: "Open Settings › General › Keyboard › Keyboards › Add New Keyboard, then choose LazyFlow.")
                     setupStep(2, title: "Allow Full Access", detail: "Full Access lets the keyboard exchange commands and finished text with the LazyFlow app. Audio never enters the keyboard extension.")
-                    setupStep(3, title: "Start a voice session", detail: "Return here and start a session. In any text field, hold the globe and choose LazyFlow.")
+                    setupStep(3, title: "Start a voice session", detail: "Start once in LazyFlow and allow notifications. In a text field, switch keyboards, tap Start talking, then open the notification.")
 
                     Button("Open Settings") {
                         guard let url = URL(string: UIApplication.openSettingsURLString) else { return }

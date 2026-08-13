@@ -92,4 +92,27 @@ final class MobileContractTests: XCTestCase {
             "The test host must be signed with group.com.fanpit.LazyFlow; do not set CODE_SIGNING_ALLOWED=NO."
         )
     }
+
+    @MainActor
+    func testKeyboardVoiceSessionRequestUsesSharedCommandBridge() {
+        let store = SharedDictationStore(defaults: defaults)
+        let model = KeyboardModel(
+            hasFullAccess: true,
+            store: store,
+            sharedContainerAvailable: true,
+            insertText: { _ in }
+        )
+
+        let commandID = model.prepareVoiceSessionRequest()
+        let snapshot = store.snapshot()
+
+        XCTAssertFalse(commandID.isEmpty)
+        XCTAssertEqual(snapshot.command, .beginSession)
+        XCTAssertEqual(snapshot.commandID, commandID)
+        XCTAssertTrue(model.isRequestingLaunch)
+
+        model.completeVoiceSessionRequest(notificationScheduled: true)
+        XCTAssertFalse(model.isRequestingLaunch)
+        XCTAssertEqual(model.launchMessage, "Tap the notification to open LazyFlow.")
+    }
 }

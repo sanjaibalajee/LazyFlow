@@ -50,6 +50,11 @@ final class DictationSessionController: ObservableObject {
         phase = snapshot.isSessionActive ? snapshot.phase : .off
         tone = snapshot.tone
         processedCommandID = snapshot.command == .beginSession ? "" : snapshot.commandID
+        KeyboardHandoffDiagnostics.record(
+            .app,
+            "Session controller initialized",
+            details: "phase=\(phase.rawValue), command=\(snapshot.command.rawValue), appGroup=\(store.hasSharedContainer)"
+        )
     }
 
     deinit {
@@ -72,12 +77,19 @@ final class DictationSessionController: ObservableObject {
     }
 
     func startSession() async {
+        KeyboardHandoffDiagnostics.record(
+            .app,
+            "Start session requested",
+            details: "currentPhase=\(phase.rawValue)"
+        )
         guard phase == .off || phase == .failed else { return }
         guard hasSharedContainer else {
+            KeyboardHandoffDiagnostics.record(.bridge, "Start blocked because App Group is unavailable")
             fail(with: DictationSessionError.unavailableAppGroup)
             return
         }
         guard !settings.needsGroqKey || settings.hasGroqKey else {
+            KeyboardHandoffDiagnostics.record(.app, "Start blocked because the Groq key is missing")
             fail(with: DictationSessionError.missingGroqKey)
             return
         }
@@ -89,7 +101,8 @@ final class DictationSessionController: ObservableObject {
             try await audio.arm()
             phase = .ready
             store.setPhase(.ready, renewSession: true)
-            await QuickOpenNotification.requestAuthorizationIfNeeded()
+            KeyboardHandoffDiagnostics.record(.app, "Voice session is ready")
+            await KeyboardHandoffNotification.requestAuthorizationIfNeeded()
         } catch {
             fail(with: error)
         }
@@ -135,6 +148,11 @@ final class DictationSessionController: ObservableObject {
 
         switch snapshot.command {
         case .beginSession:
+            KeyboardHandoffDiagnostics.record(
+                .bridge,
+                "App picked up keyboard begin-session command",
+                details: "commandID=\(snapshot.commandID)"
+            )
             Task { await startSession() }
         case .start:
             beginUtterance()
@@ -203,6 +221,7 @@ final class DictationSessionController: ObservableObject {
     private func fail(with error: Error) {
         audio.cancelRecording()
         errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        KeyboardHandoffDiagnostics.record(.app, "Session failed", details: errorMessage)
         phase = .failed
         store.setPhase(.failed, errorMessage: errorMessage)
     }

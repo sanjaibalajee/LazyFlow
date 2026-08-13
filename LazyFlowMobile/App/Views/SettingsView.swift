@@ -17,6 +17,9 @@ struct SettingsView: View {
                 rewriteSection
                 groqKeySection
                 keyboardSection
+#if DEBUG
+                KeyboardHandoffDiagnosticsView()
+#endif
                 privacySection
             }
             .navigationTitle("Settings")

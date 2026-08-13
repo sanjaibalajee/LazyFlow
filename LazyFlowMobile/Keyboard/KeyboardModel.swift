@@ -6,8 +6,8 @@ final class KeyboardModel: ObservableObject {
     @Published private(set) var snapshot: DictationSnapshot
     @Published private(set) var hasFullAccess: Bool
     @Published private(set) var hasSharedContainer: Bool
-    @Published private(set) var handoffMessage = ""
-    @Published private(set) var isOpeningApp = false
+    @Published private(set) var launchMessage = ""
+    @Published private(set) var isRequestingLaunch = false
 
     private let store: SharedDictationStore
     private let insertText: (String) -> Void
@@ -62,19 +62,24 @@ final class KeyboardModel: ObservableObject {
         store.request(.endSession)
     }
 
-    func prepareAppHandoff() {
-        handoffMessage = ""
-        isOpeningApp = true
-        store.request(.beginSession)
+    @discardableResult
+    func prepareVoiceSessionRequest() -> String {
+        launchMessage = ""
+        isRequestingLaunch = true
+        let commandID = store.request(.beginSession)
+        KeyboardHandoffDiagnostics.record(
+            .bridge,
+            "Keyboard wrote begin-session command",
+            details: "commandID=\(commandID), appGroup=\(hasSharedContainer), fullAccess=\(hasFullAccess)"
+        )
+        return commandID
     }
 
-    func completeAppHandoff(opened: Bool, notificationScheduled: Bool = false) {
-        isOpeningApp = false
-        if notificationScheduled {
-            handoffMessage = "Tap the LazyFlow notification, then swipe back here when the session is ready."
-        } else if !opened {
-            handoffMessage = "iOS couldn’t open LazyFlow from this keyboard. Open the app once, start a voice session, then come back."
-        }
+    func completeVoiceSessionRequest(notificationScheduled: Bool) {
+        isRequestingLaunch = false
+        launchMessage = notificationScheduled
+            ? "Tap the notification to open LazyFlow."
+            : "Allow LazyFlow notifications, then try again."
     }
 
     private func startMonitoring() {

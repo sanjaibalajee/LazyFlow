@@ -30,6 +30,7 @@ targets:
   LazyFlowMobile:
     type: application
     platform: iOS
+    productName: LazyFlow
     sources:
       - path: App
       - path: Shared
@@ -43,7 +44,6 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.fanpit.LazyFlowMobile
-        PRODUCT_NAME: LazyFlow
         INFOPLIST_FILE: App/Info.plist
         CODE_SIGN_ENTITLEMENTS: App/LazyFlowMobile.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -60,6 +60,7 @@ targets:
   LazyFlowKeyboard:
     type: app-extension
     platform: iOS
+    productName: LazyFlow Keyboard
     sources:
       - path: Keyboard
       - path: Shared
@@ -68,7 +69,6 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.fanpit.LazyFlowMobile.Keyboard
-        PRODUCT_NAME: LazyFlow Keyboard
         INFOPLIST_FILE: Keyboard/Info.plist
         CODE_SIGN_ENTITLEMENTS: Keyboard/LazyFlowKeyboard.entitlements
         APPLICATION_EXTENSION_API_ONLY: YES

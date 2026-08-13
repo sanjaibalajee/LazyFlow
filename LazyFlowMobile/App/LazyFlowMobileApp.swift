@@ -3,7 +3,7 @@ import UIKit
 import UserNotifications
 
 extension Notification.Name {
-    static let lazyFlowQuickStart = Notification.Name("lazyFlowQuickStart")
+    static let lazyFlowStartSessionRequested = Notification.Name("lazyFlowStartSessionRequested")
 }
 
 final class LazyFlowAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
@@ -12,16 +12,31 @@ final class LazyFlowAppDelegate: NSObject, UIApplicationDelegate, UNUserNotifica
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        KeyboardHandoffDiagnostics.record(
+            .app,
+            "Application launched",
+            details: launchOptions == nil ? "standard launch" : "launch options present"
+        )
         return true
+    }
+
+    func applicationDidBecomeActive(_ application: UIApplication) {
+        KeyboardHandoffDiagnostics.record(.app, "Application became active")
     }
 
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse
     ) async {
-        guard response.notification.request.identifier == QuickOpenNotification.requestIdentifier else { return }
+        let identifier = response.notification.request.identifier
+        KeyboardHandoffDiagnostics.record(
+            .notification,
+            "Notification response received by app",
+            details: "identifier=\(identifier)"
+        )
+        guard identifier == KeyboardHandoffNotification.requestIdentifier else { return }
         await MainActor.run {
-            NotificationCenter.default.post(name: .lazyFlowQuickStart, object: nil)
+            NotificationCenter.default.post(name: .lazyFlowStartSessionRequested, object: nil)
         }
     }
 }

@@ -4,7 +4,7 @@ import SwiftUI
 struct KeyboardRootView: View {
     @ObservedObject var model: KeyboardModel
     var nextKeyboard: () -> Void
-    var openLazyFlow: () -> Void
+    var requestVoiceSession: () -> Void
 
     var body: some View {
         VStack(spacing: 10) {
@@ -89,7 +89,7 @@ struct KeyboardRootView: View {
                 Text("Start a voice session")
                     .font(.headline)
                 Text(model.hasSharedContainer
-                     ? "The app listens. This keyboard inserts."
+                     ? "Tap below, then open the notification."
                      : "Unsigned build — reinstall LazyFlow from Xcode")
                     .font(.caption)
                     .foregroundStyle(model.hasSharedContainer ? Color.secondary : Color.orange)
@@ -97,15 +97,15 @@ struct KeyboardRootView: View {
                     .multilineTextAlignment(.center)
             }
 
-            Button(action: openLazyFlow) {
+            Button(action: requestVoiceSession) {
                 HStack(spacing: 8) {
-                    if model.isOpeningApp {
+                    if model.isRequestingLaunch {
                         ProgressView()
                             .controlSize(.small)
                     } else {
                         Image(systemName: "mic.fill")
                     }
-                    Text(model.isOpeningApp ? "Opening LazyFlow…" : "Start talking")
+                    Text(model.isRequestingLaunch ? "Sending…" : "Start talking")
                 }
                 .font(.headline)
                 .foregroundStyle(Color.accentColor)
@@ -118,13 +118,16 @@ struct KeyboardRootView: View {
                 )
             }
             .buttonStyle(KeyboardPressStyle())
-            .disabled(model.isOpeningApp)
+            .disabled(model.isRequestingLaunch)
 
-            Text(handoffCopy)
-                .font(.caption2)
-                .foregroundStyle(model.handoffMessage.isEmpty ? Color.secondary : Color.orange)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
+            if !model.launchMessage.isEmpty {
+                Text(model.launchMessage)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .transition(.opacity)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -252,20 +255,13 @@ struct KeyboardRootView: View {
 
             Text("Allow Full Access")
                 .font(.headline)
-            Text("Enable it for LazyFlow in Keyboard Settings. It is used only for the private app bridge.")
+            Text("Enable it for LazyFlow in Keyboard Settings. Audio stays in the app.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 330)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private var handoffCopy: String {
-        if !model.handoffMessage.isEmpty {
-            return model.handoffMessage
-        }
-        return "Start in LazyFlow, then return to your text field."
     }
 
     private var canRecord: Bool {

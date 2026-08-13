@@ -9,6 +9,12 @@ final class KeyboardViewController: UIInputViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
+        KeyboardHandoffDiagnostics.record(
+            .keyboard,
+            "Keyboard loaded",
+            details: "fullAccess=\(hasFullAccess)"
+        )
+
         let model = KeyboardModel(
             hasFullAccess: hasFullAccess,
             insertText: { [weak self] text in
@@ -20,22 +26,20 @@ final class KeyboardViewController: UIInputViewController {
             nextKeyboard: { [weak self] in
                 self?.advanceToNextInputMode()
             },
-            openLazyFlow: { [weak self, weak model] in
-                model?.prepareAppHandoff()
-                guard let url = URL(string: "lazyflow://start"),
-                      let context = self?.extensionContext else {
-                    model?.completeAppHandoff(opened: false)
-                    return
-                }
-                context.open(url) { opened in
-                    Task {
-                        let notificationScheduled = opened ? false : await QuickOpenNotification.schedule()
-                        await MainActor.run {
-                            model?.completeAppHandoff(
-                                opened: opened,
-                                notificationScheduled: notificationScheduled
-                            )
-                        }
+            requestVoiceSession: { [weak model] in
+                guard let model else { return }
+                let commandID = model.prepareVoiceSessionRequest()
+                Task {
+                    KeyboardHandoffDiagnostics.record(
+                        .keyboard,
+                        "Requesting Open LazyFlow notification",
+                        details: "commandID=\(commandID)"
+                    )
+                    let notificationScheduled = await KeyboardHandoffNotification.schedule()
+                    await MainActor.run {
+                        model.completeVoiceSessionRequest(
+                            notificationScheduled: notificationScheduled
+                        )
                     }
                 }
             }
