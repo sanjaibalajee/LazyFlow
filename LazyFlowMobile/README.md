@@ -11,7 +11,9 @@ LazyFlow for iOS is a native companion app plus a focused custom keyboard. It is
 
 The keyboard never requests or receives microphone input. Full Access is needed only for the App Group bridge. While a voice session is active, the app keeps the microphone session alive and iOS displays its orange privacy indicator. Sessions expire after 30 minutes and can be ended from either surface.
 
-The keyboard's **Start talking** button writes a session command and makes a best-effort request to open `lazyflow://start`. iOS does not officially guarantee containing-app launches from custom keyboards, so the keyboard also shows a clear manual fallback when that request is declined. No private URL-opening API is used.
+The keyboard's **Start talking** button writes a session command and makes a best-effort request to open `lazyflow://start`. iOS does not officially guarantee containing-app launches from custom keyboards. When that request is declined, LazyFlow posts a local **Open LazyFlow** notification; tapping it opens the app and replays the pending session command. If notification alerts are disabled, the keyboard shows the manual fallback instead. No implementation-detail URL-opening workaround is used.
+
+On iOS 26.4 and later, the user must swipe back to the original app after LazyFlow activates the microphone. Apple does not provide a public API for a keyboard-to-container-to-host round trip.
 
 ## Processing and Groq
 

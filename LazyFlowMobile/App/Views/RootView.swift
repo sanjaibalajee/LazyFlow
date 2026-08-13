@@ -62,6 +62,10 @@ struct RootView: View {
                 break
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .lazyFlowQuickStart)) { _ in
+            selectedTab = 0
+            Task { await session.startSession() }
+        }
 #if DEBUG
         .task {
             let arguments = ProcessInfo.processInfo.arguments
@@ -144,8 +148,8 @@ struct RootView: View {
                 accessibilityLabel: statusTitle
             )
             .id(glyphStyle)
-            .scaleEffect(session.isRecording ? 1.14 : 1)
-            .frame(height: 88)
+            .scaleEffect(session.isRecording ? 1.82 : 1.62)
+            .frame(height: 132)
             .transition(.scale.combined(with: .opacity))
             .animation(.smooth(duration: 0.45), value: session.phase)
 

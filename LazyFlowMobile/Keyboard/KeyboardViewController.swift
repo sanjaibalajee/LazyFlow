@@ -28,8 +28,14 @@ final class KeyboardViewController: UIInputViewController {
                     return
                 }
                 context.open(url) { opened in
-                    Task { @MainActor in
-                        model?.completeAppHandoff(opened: opened)
+                    Task {
+                        let notificationScheduled = opened ? false : await QuickOpenNotification.schedule()
+                        await MainActor.run {
+                            model?.completeAppHandoff(
+                                opened: opened,
+                                notificationScheduled: notificationScheduled
+                            )
+                        }
                     }
                 }
             }

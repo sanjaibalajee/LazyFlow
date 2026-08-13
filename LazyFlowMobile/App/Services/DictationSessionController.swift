@@ -49,7 +49,7 @@ final class DictationSessionController: ObservableObject {
         let snapshot = store.snapshot()
         phase = snapshot.isSessionActive ? snapshot.phase : .off
         tone = snapshot.tone
-        processedCommandID = snapshot.commandID
+        processedCommandID = snapshot.command == .beginSession ? "" : snapshot.commandID
     }
 
     deinit {
@@ -89,6 +89,7 @@ final class DictationSessionController: ObservableObject {
             try await audio.arm()
             phase = .ready
             store.setPhase(.ready, renewSession: true)
+            await QuickOpenNotification.requestAuthorizationIfNeeded()
         } catch {
             fail(with: error)
         }

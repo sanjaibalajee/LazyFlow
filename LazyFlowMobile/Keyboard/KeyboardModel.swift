@@ -68,9 +68,11 @@ final class KeyboardModel: ObservableObject {
         store.request(.beginSession)
     }
 
-    func completeAppHandoff(opened: Bool) {
+    func completeAppHandoff(opened: Bool, notificationScheduled: Bool = false) {
         isOpeningApp = false
-        if !opened {
+        if notificationScheduled {
+            handoffMessage = "Tap the LazyFlow notification, then swipe back here when the session is ready."
+        } else if !opened {
             handoffMessage = "iOS couldn’t open LazyFlow from this keyboard. Open the app once, start a voice session, then come back."
         }
     }

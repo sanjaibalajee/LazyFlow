@@ -1,4 +1,45 @@
 import Foundation
+import UserNotifications
+
+enum QuickOpenNotification {
+    static let requestIdentifier = "lazyflow.quick-open"
+
+    static func requestAuthorizationIfNeeded() async {
+        let center = UNUserNotificationCenter.current()
+        let settings = await center.notificationSettings()
+        guard settings.authorizationStatus == .notDetermined else { return }
+        _ = try? await center.requestAuthorization(options: [.alert])
+    }
+
+    static func schedule() async -> Bool {
+        let center = UNUserNotificationCenter.current()
+        let settings = await center.notificationSettings()
+        guard settings.authorizationStatus == .authorized,
+              settings.alertSetting == .enabled else {
+            return false
+        }
+
+        let content = UNMutableNotificationContent()
+        content.title = "Open LazyFlow"
+        content.body = "Tap to start your voice session, then swipe back to keep typing."
+        content.categoryIdentifier = requestIdentifier
+        content.threadIdentifier = requestIdentifier
+
+        let request = UNNotificationRequest(
+            identifier: requestIdentifier,
+            content: content,
+            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+        )
+
+        center.removePendingNotificationRequests(withIdentifiers: [requestIdentifier])
+        do {
+            try await center.add(request)
+            return true
+        } catch {
+            return false
+        }
+    }
+}
 
 enum DictationPhase: String, Codable, Sendable {
     case off
