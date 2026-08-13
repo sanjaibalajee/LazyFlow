@@ -4,6 +4,10 @@ native macos dictation app. hold right ⌥ to speak, release to paste cleaned te
 
 uses whisper for transcription and an llm to clean up the output — fixing punctuation, removing filler words, preserving code identifiers, whatever the app you're typing into needs.
 
+## ios app
+
+the native iOS companion app and voice-only keyboard are under [`LazyFlowMobile`](LazyFlowMobile/README.md). the iOS build uses Apple's on-device speech and language models, requires no API key, and keeps ordinary typing on Apple's keyboard.
+
 ## install
 
 download the latest `LazyFlow.dmg` from

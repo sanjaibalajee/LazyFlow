@@ -1,0 +1,91 @@
+name: LazyFlowMobile
+
+options:
+  createIntermediateGroups: true
+  deploymentTarget:
+    iOS: "26.0"
+  groupSortPosition: top
+  minimumXcodeGenVersion: 2.46.0
+
+configs:
+  Debug: debug
+  Release: release
+
+packages:
+  ActivityGlyph:
+    url: https://github.com/sanjaibalajee/ActivityGlyph.git
+    revision: d2bb692290243392b6723564306adb1d18aea10b
+
+settings:
+  base:
+    DEVELOPMENT_TEAM: Q78J7L8TLR
+    SWIFT_VERSION: 5.0
+    IPHONEOS_DEPLOYMENT_TARGET: 26.0
+    TARGETED_DEVICE_FAMILY: "1,2"
+    ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES
+    LOCALIZATION_PREFERS_STRING_CATALOGS: YES
+    STRING_CATALOG_GENERATE_SYMBOLS: YES
+
+targets:
+  LazyFlowMobile:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+      - path: Shared
+      - path: Resources
+    dependencies:
+      - target: LazyFlowKeyboard
+        embed: true
+      - package: ActivityGlyph
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.fanpit.LazyFlowMobile
+        PRODUCT_NAME: LazyFlow
+        INFOPLIST_FILE: App/Info.plist
+        CODE_SIGN_ENTITLEMENTS: App/LazyFlowMobile.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 0.1.0
+        SUPPORTS_MACCATALYST: NO
+        SWIFT_EMIT_LOC_STRINGS: YES
+    scheme:
+      testTargets:
+        - LazyFlowMobileTests
+      gatherCoverageData: true
+
+  LazyFlowKeyboard:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Keyboard
+      - path: Shared
+    dependencies:
+      - package: ActivityGlyph
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.fanpit.LazyFlowMobile.Keyboard
+        PRODUCT_NAME: LazyFlow Keyboard
+        INFOPLIST_FILE: Keyboard/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Keyboard/LazyFlowKeyboard.entitlements
+        APPLICATION_EXTENSION_API_ONLY: YES
+        SKIP_INSTALL: YES
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 0.1.0
+        SUPPORTS_MACCATALYST: NO
+        SWIFT_EMIT_LOC_STRINGS: YES
+
+  LazyFlowMobileTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: LazyFlowMobile
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.fanpit.LazyFlowMobileTests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/LazyFlow.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/LazyFlow"
+        BUNDLE_LOADER: "$(TEST_HOST)"

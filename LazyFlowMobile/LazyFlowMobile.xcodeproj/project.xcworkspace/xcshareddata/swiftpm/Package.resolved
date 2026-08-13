@@ -1,0 +1,14 @@
+{
+  "originHash" : "058b8487df8e96f29ddcc44d5f3216d8a31ecce9f78da7186589fadff1278584",
+  "pins" : [
+    {
+      "identity" : "activityglyph",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/sanjaibalajee/ActivityGlyph.git",
+      "state" : {
+        "revision" : "d2bb692290243392b6723564306adb1d18aea10b"
+      }
+    }
+  ],
+  "version" : 3
+}

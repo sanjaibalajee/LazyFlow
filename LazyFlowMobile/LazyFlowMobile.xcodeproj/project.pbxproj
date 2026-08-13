@@ -1,0 +1,694 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		09667203D7FA3FB74F7BDB93 /* MobileContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C462051EC77E096813670E9A /* MobileContractTests.swift */; };
+		186CAE7125FA66E6BF1ABE45 /* MobileTone.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CB0F4586C7E9C4129A7E5FA /* MobileTone.swift */; };
+		24E2236CAB8F2F1C80AAA85C /* MobileTone.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CB0F4586C7E9C4129A7E5FA /* MobileTone.swift */; };
+		392C5C1A3D57B83D5BB06DB2 /* NativeLazyFlowEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0D8B05A46D1ACE407DAF2D4 /* NativeLazyFlowEngine.swift */; };
+		3C251B9060CC042B36BFF915 /* ActivityGlyph in Frameworks */ = {isa = PBXBuildFile; productRef = 52F24ABC00DFC0A64030AD91 /* ActivityGlyph */; };
+		5CD01D6B0756DA10CB67320B /* KeyboardModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D45C6E02EFAE2A26FE68C96 /* KeyboardModel.swift */; };
+		6079E537B3DCD653588E6843 /* AudioSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5608A2264B4040E07EC5CF84 /* AudioSessionController.swift */; };
+		7C0A764767F4735BD6B7318E /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC6B4FF0355217DAEB96CB60 /* RootView.swift */; };
+		8B62057E8C0AEF9A3D959A95 /* LazyFlowMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 732471634C48941DDF3CAD48 /* LazyFlowMobileApp.swift */; };
+		92DE94FB67DFE846F43D1363 /* ActivityGlyph in Frameworks */ = {isa = PBXBuildFile; productRef = D6E992E4B891664EB14C4CBD /* ActivityGlyph */; };
+		9B3C873B47C27DA5E7A31EC4 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D80F0ED289A01C4E900CE6E4 /* OnboardingView.swift */; };
+		ADF695380D2E819A8A3D22A3 /* TonePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 795C4F7551B45A0097375B76 /* TonePicker.swift */; };
+		BFD498F834D755A1B1FB1131 /* KeyboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E82C51E23E3C02D31DAC7AF0 /* KeyboardViewController.swift */; };
+		D124493CB6CD5A9F25D54086 /* FlowWaveform.swift in Sources */ = {isa = PBXBuildFile; fileRef = E569E174AADFAAD346DF0945 /* FlowWaveform.swift */; };
+		D4386FD75499137233E567A3 /* DictationSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB4DA514BD33106D87D765C /* DictationSessionController.swift */; };
+		E6FE22F91471C756428FFEAF /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D2A3AF622389042F20F39B1A /* Assets.xcassets */; };
+		EC1F11E0CF9D2BFF029F149E /* FlowWaveform.swift in Sources */ = {isa = PBXBuildFile; fileRef = E569E174AADFAAD346DF0945 /* FlowWaveform.swift */; };
+		EDE4E1DB94C0877BC3138AEB /* LazyFlowKeyboard.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F2D78EF6E4F1AD0559F1E962 /* LazyFlowKeyboard.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		F5050DF37300EA44555EEC2C /* KeyboardRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F9F15D4A9D7EACDA709BDD4 /* KeyboardRootView.swift */; };
+		F8D8FE7E93487DB3BE412D0F /* DictationContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9664EBC8540A216654508371 /* DictationContract.swift */; };
+		F9DEA8DD1397A8F6D8695545 /* DictationContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9664EBC8540A216654508371 /* DictationContract.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		936820A3317F760E82C8C1A7 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0F5BE0612552AB6D09899624 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9A939C2EFE8927D390A467A8;
+			remoteInfo = LazyFlowKeyboard;
+		};
+		95CD34400861C9AD937B5DCB /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0F5BE0612552AB6D09899624 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9A65851A5A748ADD1C4D3F8C;
+			remoteInfo = LazyFlowMobile;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		AEEDFF2C2283536EBC749F1E /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				EDE4E1DB94C0877BC3138AEB /* LazyFlowKeyboard.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		1CB0F4586C7E9C4129A7E5FA /* MobileTone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileTone.swift; sourceTree = "<group>"; };
+		3D45C6E02EFAE2A26FE68C96 /* KeyboardModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardModel.swift; sourceTree = "<group>"; };
+		446CFC6FE5B683E6AA0BE76A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		5608A2264B4040E07EC5CF84 /* AudioSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioSessionController.swift; sourceTree = "<group>"; };
+		5F9F15D4A9D7EACDA709BDD4 /* KeyboardRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardRootView.swift; sourceTree = "<group>"; };
+		608E9D21709DA0D384E54E0E /* LazyFlowMobileTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = LazyFlowMobileTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		6E954652D90BE14003357A93 /* LazyFlowKeyboard.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LazyFlowKeyboard.entitlements; sourceTree = "<group>"; };
+		732471634C48941DDF3CAD48 /* LazyFlowMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LazyFlowMobileApp.swift; sourceTree = "<group>"; };
+		795C4F7551B45A0097375B76 /* TonePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TonePicker.swift; sourceTree = "<group>"; };
+		7BE737BCD3F727BB4226DF1E /* LazyFlowMobile.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LazyFlowMobile.entitlements; sourceTree = "<group>"; };
+		9664EBC8540A216654508371 /* DictationContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationContract.swift; sourceTree = "<group>"; };
+		A14A1C372E471617B9E923AC /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		B6B5F8D9F5BFF4688ADDD0EF /* LazyFlowMobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = LazyFlowMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C462051EC77E096813670E9A /* MobileContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileContractTests.swift; sourceTree = "<group>"; };
+		CC6B4FF0355217DAEB96CB60 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		CDB4DA514BD33106D87D765C /* DictationSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationSessionController.swift; sourceTree = "<group>"; };
+		D0D8B05A46D1ACE407DAF2D4 /* NativeLazyFlowEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeLazyFlowEngine.swift; sourceTree = "<group>"; };
+		D2A3AF622389042F20F39B1A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		D80F0ED289A01C4E900CE6E4 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		E569E174AADFAAD346DF0945 /* FlowWaveform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowWaveform.swift; sourceTree = "<group>"; };
+		E82C51E23E3C02D31DAC7AF0 /* KeyboardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardViewController.swift; sourceTree = "<group>"; };
+		F2D78EF6E4F1AD0559F1E962 /* LazyFlowKeyboard.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = LazyFlowKeyboard.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		2A61EEE1BD9FA46E983081C3 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3C251B9060CC042B36BFF915 /* ActivityGlyph in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B3FE62D3426D48A7B2A6A80E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				92DE94FB67DFE846F43D1363 /* ActivityGlyph in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0D5570985EE063A7D1485902 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				9664EBC8540A216654508371 /* DictationContract.swift */,
+				E569E174AADFAAD346DF0945 /* FlowWaveform.swift */,
+				1CB0F4586C7E9C4129A7E5FA /* MobileTone.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		117E950321254F20070F1BD0 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				D2A3AF622389042F20F39B1A /* Assets.xcassets */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		1229D197290316B8841A5E1B /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				D80F0ED289A01C4E900CE6E4 /* OnboardingView.swift */,
+				CC6B4FF0355217DAEB96CB60 /* RootView.swift */,
+				795C4F7551B45A0097375B76 /* TonePicker.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		412F6FD284BC429CB262A489 = {
+			isa = PBXGroup;
+			children = (
+				607A72D9F915841FB4386A4C /* App */,
+				46BB808CC4A2B64059DA8A42 /* Keyboard */,
+				117E950321254F20070F1BD0 /* Resources */,
+				0D5570985EE063A7D1485902 /* Shared */,
+				731DF3E3B6626153C5049712 /* Tests */,
+				B113A6CD8E4802D4DB174260 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		46BB808CC4A2B64059DA8A42 /* Keyboard */ = {
+			isa = PBXGroup;
+			children = (
+				A14A1C372E471617B9E923AC /* Info.plist */,
+				3D45C6E02EFAE2A26FE68C96 /* KeyboardModel.swift */,
+				5F9F15D4A9D7EACDA709BDD4 /* KeyboardRootView.swift */,
+				E82C51E23E3C02D31DAC7AF0 /* KeyboardViewController.swift */,
+				6E954652D90BE14003357A93 /* LazyFlowKeyboard.entitlements */,
+			);
+			path = Keyboard;
+			sourceTree = "<group>";
+		};
+		607A72D9F915841FB4386A4C /* App */ = {
+			isa = PBXGroup;
+			children = (
+				9846C040541D930E9AE2877B /* Services */,
+				1229D197290316B8841A5E1B /* Views */,
+				446CFC6FE5B683E6AA0BE76A /* Info.plist */,
+				7BE737BCD3F727BB4226DF1E /* LazyFlowMobile.entitlements */,
+				732471634C48941DDF3CAD48 /* LazyFlowMobileApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		731DF3E3B6626153C5049712 /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				C462051EC77E096813670E9A /* MobileContractTests.swift */,
+			);
+			path = Tests;
+			sourceTree = "<group>";
+		};
+		9846C040541D930E9AE2877B /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				5608A2264B4040E07EC5CF84 /* AudioSessionController.swift */,
+				CDB4DA514BD33106D87D765C /* DictationSessionController.swift */,
+				D0D8B05A46D1ACE407DAF2D4 /* NativeLazyFlowEngine.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		B113A6CD8E4802D4DB174260 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				F2D78EF6E4F1AD0559F1E962 /* LazyFlowKeyboard.appex */,
+				B6B5F8D9F5BFF4688ADDD0EF /* LazyFlowMobile.app */,
+				608E9D21709DA0D384E54E0E /* LazyFlowMobileTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		9A65851A5A748ADD1C4D3F8C /* LazyFlowMobile */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9D799A39F38DA9E917B975FA /* Build configuration list for PBXNativeTarget "LazyFlowMobile" */;
+			buildPhases = (
+				005A0CC19234C9BD67D624B6 /* Sources */,
+				188865A352961F7B72CD432F /* Resources */,
+				2A61EEE1BD9FA46E983081C3 /* Frameworks */,
+				AEEDFF2C2283536EBC749F1E /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				0B53F02C02CC70579931F033 /* PBXTargetDependency */,
+			);
+			name = LazyFlowMobile;
+			packageProductDependencies = (
+				52F24ABC00DFC0A64030AD91 /* ActivityGlyph */,
+			);
+			productName = LazyFlowMobile;
+			productReference = B6B5F8D9F5BFF4688ADDD0EF /* LazyFlowMobile.app */;
+			productType = "com.apple.product-type.application";
+		};
+		9A939C2EFE8927D390A467A8 /* LazyFlowKeyboard */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A2EBBAB3962F3EAACF51C1B2 /* Build configuration list for PBXNativeTarget "LazyFlowKeyboard" */;
+			buildPhases = (
+				941A939C1BEB6C510CEF4ABD /* Sources */,
+				B3FE62D3426D48A7B2A6A80E /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = LazyFlowKeyboard;
+			packageProductDependencies = (
+				D6E992E4B891664EB14C4CBD /* ActivityGlyph */,
+			);
+			productName = LazyFlowKeyboard;
+			productReference = F2D78EF6E4F1AD0559F1E962 /* LazyFlowKeyboard.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		F38976CC5EB1806F2D7EF71D /* LazyFlowMobileTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7D1541C560AF8EBC13B301ED /* Build configuration list for PBXNativeTarget "LazyFlowMobileTests" */;
+			buildPhases = (
+				82728AD394EDB133CB871856 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				2F07133A701398FF04E8B224 /* PBXTargetDependency */,
+			);
+			name = LazyFlowMobileTests;
+			packageProductDependencies = (
+			);
+			productName = LazyFlowMobileTests;
+			productReference = 608E9D21709DA0D384E54E0E /* LazyFlowMobileTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		0F5BE0612552AB6D09899624 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					9A65851A5A748ADD1C4D3F8C = {
+						DevelopmentTeam = Q78J7L8TLR;
+					};
+					9A939C2EFE8927D390A467A8 = {
+						DevelopmentTeam = Q78J7L8TLR;
+					};
+					F38976CC5EB1806F2D7EF71D = {
+						DevelopmentTeam = Q78J7L8TLR;
+					};
+				};
+			};
+			buildConfigurationList = B9A8033D1FF6FCBB2F0CAFFA /* Build configuration list for PBXProject "LazyFlowMobile" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 412F6FD284BC429CB262A489;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				C1961505D4B254661F3304B8 /* XCRemoteSwiftPackageReference "ActivityGlyph" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = B113A6CD8E4802D4DB174260 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				9A65851A5A748ADD1C4D3F8C /* LazyFlowMobile */,
+				9A939C2EFE8927D390A467A8 /* LazyFlowKeyboard */,
+				F38976CC5EB1806F2D7EF71D /* LazyFlowMobileTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		188865A352961F7B72CD432F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E6FE22F91471C756428FFEAF /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		005A0CC19234C9BD67D624B6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6079E537B3DCD653588E6843 /* AudioSessionController.swift in Sources */,
+				F9DEA8DD1397A8F6D8695545 /* DictationContract.swift in Sources */,
+				D4386FD75499137233E567A3 /* DictationSessionController.swift in Sources */,
+				D124493CB6CD5A9F25D54086 /* FlowWaveform.swift in Sources */,
+				8B62057E8C0AEF9A3D959A95 /* LazyFlowMobileApp.swift in Sources */,
+				186CAE7125FA66E6BF1ABE45 /* MobileTone.swift in Sources */,
+				392C5C1A3D57B83D5BB06DB2 /* NativeLazyFlowEngine.swift in Sources */,
+				9B3C873B47C27DA5E7A31EC4 /* OnboardingView.swift in Sources */,
+				7C0A764767F4735BD6B7318E /* RootView.swift in Sources */,
+				ADF695380D2E819A8A3D22A3 /* TonePicker.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		82728AD394EDB133CB871856 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				09667203D7FA3FB74F7BDB93 /* MobileContractTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		941A939C1BEB6C510CEF4ABD /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F8D8FE7E93487DB3BE412D0F /* DictationContract.swift in Sources */,
+				EC1F11E0CF9D2BFF029F149E /* FlowWaveform.swift in Sources */,
+				5CD01D6B0756DA10CB67320B /* KeyboardModel.swift in Sources */,
+				F5050DF37300EA44555EEC2C /* KeyboardRootView.swift in Sources */,
+				BFD498F834D755A1B1FB1131 /* KeyboardViewController.swift in Sources */,
+				24E2236CAB8F2F1C80AAA85C /* MobileTone.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		0B53F02C02CC70579931F033 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9A939C2EFE8927D390A467A8 /* LazyFlowKeyboard */;
+			targetProxy = 936820A3317F760E82C8C1A7 /* PBXContainerItemProxy */;
+		};
+		2F07133A701398FF04E8B224 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9A65851A5A748ADD1C4D3F8C /* LazyFlowMobile */;
+			targetProxy = 95CD34400861C9AD937B5DCB /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		0C687ED4AC9D6E3F05DFCA0C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = App/LazyFlowMobile.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = App/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.fanpit.LazyFlowMobile;
+				PRODUCT_NAME = LazyFlow;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		1F11A7131EDF7BF4BD5B61EC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.fanpit.LazyFlowMobileTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/LazyFlow.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/LazyFlow";
+			};
+			name = Release;
+		};
+		8DD79A85525BBCF0186040CD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = Q78J7L8TLR;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		9F79B13D7551DCE7C823B11C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = Keyboard/LazyFlowKeyboard.entitlements;
+				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = Keyboard/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.fanpit.LazyFlowMobile.Keyboard;
+				PRODUCT_NAME = "LazyFlow Keyboard";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		AA66A68F675926268BC23030 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.fanpit.LazyFlowMobileTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/LazyFlow.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/LazyFlow";
+			};
+			name = Debug;
+		};
+		C58739EDD7C8E4CC55EE588A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = Keyboard/LazyFlowKeyboard.entitlements;
+				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = Keyboard/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.fanpit.LazyFlowMobile.Keyboard;
+				PRODUCT_NAME = "LazyFlow Keyboard";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		F19611537DEFA62586E3FDF0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = Q78J7L8TLR;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		FCD9DA5E372E2B1ACC9EF9BE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = App/LazyFlowMobile.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = App/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.fanpit.LazyFlowMobile;
+				PRODUCT_NAME = LazyFlow;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		7D1541C560AF8EBC13B301ED /* Build configuration list for PBXNativeTarget "LazyFlowMobileTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA66A68F675926268BC23030 /* Debug */,
+				1F11A7131EDF7BF4BD5B61EC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		9D799A39F38DA9E917B975FA /* Build configuration list for PBXNativeTarget "LazyFlowMobile" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0C687ED4AC9D6E3F05DFCA0C /* Debug */,
+				FCD9DA5E372E2B1ACC9EF9BE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		A2EBBAB3962F3EAACF51C1B2 /* Build configuration list for PBXNativeTarget "LazyFlowKeyboard" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C58739EDD7C8E4CC55EE588A /* Debug */,
+				9F79B13D7551DCE7C823B11C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		B9A8033D1FF6FCBB2F0CAFFA /* Build configuration list for PBXProject "LazyFlowMobile" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F19611537DEFA62586E3FDF0 /* Debug */,
+				8DD79A85525BBCF0186040CD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		C1961505D4B254661F3304B8 /* XCRemoteSwiftPackageReference "ActivityGlyph" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sanjaibalajee/ActivityGlyph.git";
+			requirement = {
+				kind = revision;
+				revision = d2bb692290243392b6723564306adb1d18aea10b;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		52F24ABC00DFC0A64030AD91 /* ActivityGlyph */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C1961505D4B254661F3304B8 /* XCRemoteSwiftPackageReference "ActivityGlyph" */;
+			productName = ActivityGlyph;
+		};
+		D6E992E4B891664EB14C4CBD /* ActivityGlyph */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C1961505D4B254661F3304B8 /* XCRemoteSwiftPackageReference "ActivityGlyph" */;
+			productName = ActivityGlyph;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 0F5BE0612552AB6D09899624 /* Project object */;
+}
