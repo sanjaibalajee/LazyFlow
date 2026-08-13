@@ -85,4 +85,11 @@ final class MobileContractTests: XCTestCase {
         try MobileKeychain.delete(for: account)
         XCTAssertNil(MobileKeychain.load(for: account))
     }
+
+    func testSignedBuildHasAppGroupBridge() {
+        XCTAssertTrue(
+            SharedDictationStore().hasSharedContainer,
+            "The test host must be signed with group.com.fanpit.LazyFlow; do not set CODE_SIGNING_ALLOWED=NO."
+        )
+    }
 }

@@ -188,7 +188,7 @@ struct SettingsView: View {
             Text("Keyboard")
         } footer: {
             if !hasSharedContainer {
-                Text("The app and keyboard cannot communicate in this build. Add the group.com.fanpit.LazyFlow capability to both targets and provisioning profiles.")
+                Text("This build has no shared container. Do not disable code signing; both targets must be signed with group.com.fanpit.LazyFlow.")
             } else {
                 Text("Full Access is required only for the private App Group command bridge.")
             }

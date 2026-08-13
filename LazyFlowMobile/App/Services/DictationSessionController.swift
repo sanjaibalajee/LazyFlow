@@ -8,7 +8,7 @@ enum DictationSessionError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unavailableAppGroup:
-            "The app and keyboard bridge is unavailable. Open Settings to check the App Group capability."
+            "This build is missing App Group access. Rebuild without disabling code signing, or re-sign both targets with the LazyFlow App Group."
         case .missingGroqKey:
             "Groq is selected but no API key is saved. Add one in Settings or choose Apple On-Device."
         }

@@ -80,7 +80,7 @@ struct KeyboardRootView: View {
                         .font(.headline)
                     Text(model.hasSharedContainer
                          ? "LazyFlow needs the app to own the microphone"
-                         : "Bridge unavailable — check LazyFlow Settings")
+                         : "Unsigned build — reinstall LazyFlow from Xcode")
                         .font(.caption)
                         .foregroundStyle(model.hasSharedContainer ? Color.secondary : Color.orange)
                         .lineLimit(2)

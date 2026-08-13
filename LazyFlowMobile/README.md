@@ -50,7 +50,9 @@ DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer \
   xcodebuild -project LazyFlowMobile/LazyFlowMobile.xcodeproj \
   -scheme LazyFlowMobile \
   -destination 'generic/platform=iOS Simulator' \
-  CODE_SIGNING_ALLOWED=NO build
+  build
 ```
+
+Do not pass `CODE_SIGNING_ALLOWED=NO`. Simulator builds are signed locally by Xcode; that signature carries the simulated App Group and Keychain entitlements. An unsigned build can launch, but the app and keyboard cannot share commands.
 
 `ActivityGlyph` is consumed as a Swift Package from its public repository.
