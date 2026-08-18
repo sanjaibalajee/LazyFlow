@@ -315,29 +315,30 @@ final class AppState {
                         // All corrections are applied as exact Swift substitutions before the
                         // LLM sees the text. LLM-based substitution is unreliable for proper
                         // names — the model capitalises, rephrases, or skips them unpredictably.
-                        let preApplied = applyCorrections(defiltered, corrections: corrections)
+                        let application = CorrectionEngine.apply(defiltered, corrections: corrections)
+                        final = application.text
+                        if !application.appliedIDs.isEmpty {
+                            correctionStore.incrementFrequency(for: Array(application.appliedIDs))
+                        }
                         // Route LLM: cloud (Groq) or on-device (MLX)
                         switch capturedLLMBackend {
                         case .cloud:
                             final = try await cloudLLM.process(
-                                rawTranscript: preApplied,
+                                rawTranscript: application.text,
                                 profile: p,
                                 corrections: [],
                                 kbContext: capturedKB,
                                 focusContext: capturedFocus)
                         case .local:
                             final = try await localLLM.process(
-                                rawTranscript: preApplied,
+                                rawTranscript: application.text,
                                 profile: p,
                                 corrections: [],
                                 kbContext: capturedKB,
                                 focusContext: capturedFocus)
                         }
-                        if !corrections.isEmpty {
-                            correctionStore.incrementFrequency(for: corrections.map(\.id))
-                        }
                     } catch {
-                        print("[LazyFlow] ⚠️ Cleanup failed, pasting filtered transcript: \(error.localizedDescription)")
+                        print("[LazyFlow] ⚠️ Cleanup failed, pasting corrected transcript: \(error.localizedDescription)")
                         errorMessage = "Cleanup unavailable — transcript pasted."
                     }
                 }
@@ -510,30 +511,6 @@ final class AppState {
                 saved.restore(to: pb)
             }
         }
-    }
-
-    // MARK: - Helpers
-
-    // Applies correction pairs as exact Swift substitutions (case-insensitive, word-boundary-aware).
-    // Normalises the heard key at match time so entries stored with punctuation ("rishin,") work
-    // identically to clean ones ("rishin") — surrounding punctuation in the text is preserved.
-    private func applyCorrections(_ text: String, corrections: [CorrectionEntry]) -> String {
-        let punct = CharacterSet(charactersIn: ".,;:!?\"'")
-        var result = text
-        for correction in corrections.sorted(by: { $0.frequency > $1.frequency }) {
-            let heard = correction.heard
-                .trimmingCharacters(in: .whitespaces)
-                .trimmingCharacters(in: punct)
-            guard !heard.isEmpty else { continue }
-            let escaped = NSRegularExpression.escapedPattern(for: heard)
-            guard let regex = try? NSRegularExpression(pattern: "(?i)\\b\(escaped)\\b") else { continue }
-            let full = NSRange(result.startIndex..., in: result)
-            result = regex.stringByReplacingMatches(
-                in: result, range: full,
-                withTemplate: NSRegularExpression.escapedTemplate(for: correction.correct)
-            )
-        }
-        return result
     }
 
     private func finishProcessing(transcript: String, appName: String?, bundleIdentifier: String?) {

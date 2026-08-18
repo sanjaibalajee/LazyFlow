@@ -17,12 +17,15 @@ struct CorrectionEntry: Codable, Identifiable, FetchableRecord, PersistableRecor
     var createdAt:        Date   = Date()
 
     init(heard: String, correct: String, bundleIdentifier: String? = nil) {
-        // Strip surrounding whitespace and sentence-ending punctuation so "rishin,"
-        // and "rishin" store identically. The regex matcher uses word boundaries, so
-        // the surrounding punctuation in text is preserved during replacement.
-        let punct = CharacterSet(charactersIn: ".,;:!?\"'")
-        self.heard   = heard.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: punct)
-        self.correct = correct.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: punct)
+        self.heard   = Self.normalizedPhrase(heard)
+        self.correct = Self.normalizedPhrase(correct)
         self.bundleIdentifier = bundleIdentifier
+    }
+
+    nonisolated static func normalizedPhrase(_ value: String) -> String {
+        let punctuation = CharacterSet(charactersIn: ".,;:!?\"'")
+        return value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: punctuation)
     }
 }

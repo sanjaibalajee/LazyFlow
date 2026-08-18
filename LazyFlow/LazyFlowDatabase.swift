@@ -13,20 +13,14 @@ final class LazyFlowDatabase {
         let fm  = FileManager.default
         let dir = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
                     .appendingPathComponent("LazyFlow", isDirectory: true)
-        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        do {
+            try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        } catch {
+            print("[LazyFlow] Could not create database directory: \(error)")
+        }
 
         let url = dir.appendingPathComponent("lazyflow.db")
-
-        // Open the pool; if it fails (corrupt file, permission error) rename it aside
-        // and start fresh rather than crashing.
-        do {
-            writer = try DatabasePool(path: url.path)
-        } catch {
-            print("[LazyFlow] DB open failed (\(error)) — moving aside and starting fresh")
-            let aside = url.deletingPathExtension().appendingPathExtension("db.bak")
-            try? fm.moveItem(at: url, to: aside)
-            writer = try! DatabasePool(path: url.path) // fresh file, guaranteed to succeed
-        }
+        writer = Self.openWriter(at: url, fileManager: fm)
 
         // Migration failure is logged but non-fatal — existing rows remain accessible.
         do {
@@ -34,6 +28,47 @@ final class LazyFlowDatabase {
         } catch {
             print("[LazyFlow] DB migration failed: \(error)")
         }
+    }
+
+    private static func openWriter(at url: URL, fileManager fm: FileManager) -> DatabaseWriter {
+        do {
+            return try DatabasePool(path: url.path)
+        } catch {
+            print("[LazyFlow] DB open failed (\(error)) — preserving it and starting fresh")
+        }
+
+        let backupDirectory = url.deletingLastPathComponent()
+            .appendingPathComponent("Database Backups", isDirectory: true)
+            .appendingPathComponent("lazyflow-\(UUID().uuidString)", isDirectory: true)
+
+        do {
+            try fm.createDirectory(at: backupDirectory, withIntermediateDirectories: true)
+            for suffix in ["", "-wal", "-shm"] {
+                let source = URL(fileURLWithPath: url.path + suffix)
+                guard fm.fileExists(atPath: source.path) else { continue }
+                try fm.moveItem(
+                    at: source,
+                    to: backupDirectory.appendingPathComponent(source.lastPathComponent)
+                )
+            }
+            print("[LazyFlow] Preserved unreadable database at \(backupDirectory.path)")
+        } catch {
+            print("[LazyFlow] Could not preserve unreadable database: \(error)")
+        }
+
+        do {
+            return try DatabasePool(path: url.path)
+        } catch {
+            print("[LazyFlow] Fresh database open failed (\(error)) — using volatile storage")
+        }
+
+        if let memoryQueue = try? DatabaseQueue() {
+            return memoryQueue
+        }
+
+        // SQLite could not even allocate an in-memory database; continuing would leave every
+        // store unusable. Keep the failure explicit and diagnostic instead of force-unwrapping.
+        fatalError("LazyFlow could not initialize persistent or in-memory storage")
     }
 
     // MARK: - Migrations (additive only — never drop columns/tables)
