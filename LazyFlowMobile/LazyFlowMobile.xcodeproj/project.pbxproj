@@ -93,7 +93,7 @@
 		9664EBC8540A216654508371 /* DictationContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationContract.swift; sourceTree = "<group>"; };
 		9C5C513A9DF091FD950A0129 /* ProcessingSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessingSettings.swift; sourceTree = "<group>"; };
 		A14A1C372E471617B9E923AC /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
-		B6B5F8D9F5BFF4688ADDD0EF /* LazyFlow.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = LazyFlow.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B6B5F8D9F5BFF4688ADDD0EF /* LazyFlow.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LazyFlow.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C462051EC77E096813670E9A /* MobileContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileContractTests.swift; sourceTree = "<group>"; };
 		C6F658D6356C388751291E8A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		CBD1E77024A8AA001D4F708A /* KeyboardHandoffService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardHandoffService.swift; sourceTree = "<group>"; };
@@ -300,9 +300,6 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
-					9A65851A5A748ADD1C4D3F8C = {
-						DevelopmentTeam = Q78J7L8TLR;
-					};
 					9A939C2EFE8927D390A467A8 = {
 						DevelopmentTeam = Q78J7L8TLR;
 					};
@@ -422,6 +419,7 @@
 				CODE_SIGN_ENTITLEMENTS = App/LazyFlowMobile.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = Q78J7L8TLR;
 				INFOPLIST_FILE = App/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -654,6 +652,7 @@
 				CODE_SIGN_ENTITLEMENTS = App/LazyFlowMobile.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = Q78J7L8TLR;
 				INFOPLIST_FILE = App/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
