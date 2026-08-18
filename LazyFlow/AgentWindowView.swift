@@ -64,8 +64,8 @@ struct GoalInputView: View {
                     if appState.isRecording {
                         appState.stopRecording()
                     } else {
-                        appState.onGoalTranscribed = { [weak agent] t in
-                            if !t.isEmpty { agent?.goal = t }
+                        appState.onGoalTranscribed = { [agent] t in
+                            if !t.isEmpty { agent.goal = t }
                         }
                         appState.startGoalRecording()
                     }

@@ -37,7 +37,7 @@ enum TonePreset: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    var toneRules: String {
+    nonisolated var toneRules: String {
         switch self {
         case .technical:
             return """
@@ -102,12 +102,12 @@ struct FormattingOptions: Codable {
     var strongerPunctuation: Bool = false
     var keepFillerWords:     Bool = false
 
-    var isEmpty: Bool {
+    nonisolated var isEmpty: Bool {
         !preserveLineBreaks && !bulletize && !lowercase && !strongerPunctuation && !keepFillerWords
     }
 
     // Each active toggle contributes a concrete instruction line
-    var activeInstructions: String {
+    nonisolated var activeInstructions: String {
         var lines: [String] = []
         if preserveLineBreaks  { lines.append("- Preserve all paragraph breaks and line breaks exactly as dictated. Do not merge or reflow separate sections.") }
         if bulletize           { lines.append("- Identify enumerable items only (shopping lists, tasks, steps, options, names) and format those as bullets (use - ). Keep all narrative, conversational, contextual, or instructional sentences as plain prose — do not bullet them. If the transcript mixes a list with surrounding context, output the context as prose and the list items as bullets. Capitalize the first word of each bullet. Do not over-fragment.") }

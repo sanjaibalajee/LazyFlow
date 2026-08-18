@@ -1,10 +1,17 @@
 import Foundation
+import Observation
 
 // MARK: - Store
 
 @Observable
 final class LLMProviderStore {
     static let shared = LLMProviderStore()
+
+    /// Keychain access may require user approval on macOS. Keep decrypted values in
+    /// memory for this process so SwiftUI rendering and config reads never trigger
+    /// another Keychain lookup.
+    @ObservationIgnored private var cachedAPIKeys: [LLMProvider: String] = [:]
+    @ObservationIgnored private var loadedAPIKeys: Set<LLMProvider> = []
 
     // MARK: - Persisted selections
 
@@ -40,20 +47,37 @@ final class LLMProviderStore {
     // MARK: - API keys (Keychain, per provider)
 
     func apiKey(for provider: LLMProvider) -> String {
+        if loadedAPIKeys.contains(provider) {
+            return cachedAPIKeys[provider] ?? ""
+        }
+
         // Check new per-provider key first
-        if let key = Keychain.load(forKey: provider.keychainKey), !key.isEmpty { return key }
+        if let key = Keychain.load(forKey: provider.keychainKey), !key.isEmpty {
+            loadedAPIKeys.insert(provider)
+            cachedAPIKeys[provider] = key
+            return key
+        }
         // Groq: also check the legacy "groq_api_key" set by the old single-key system
         if provider == .groq, let legacy = Keychain.load(forKey: "groq_api_key"), !legacy.isEmpty {
             // Promote to new key on first read
             Keychain.save(legacy, forKey: provider.keychainKey)
+            loadedAPIKeys.insert(provider)
+            cachedAPIKeys[provider] = legacy
             return legacy
         }
+
+        loadedAPIKeys.insert(provider)
+        cachedAPIKeys[provider] = ""
         return ""
     }
 
     func setApiKey(_ key: String, for provider: LLMProvider) {
-        if key.isEmpty { Keychain.delete(forKey: provider.keychainKey) }
-        else           { Keychain.save(key,  forKey: provider.keychainKey) }
+        let normalized = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        loadedAPIKeys.insert(provider)
+        cachedAPIKeys[provider] = normalized
+
+        if normalized.isEmpty { Keychain.delete(forKey: provider.keychainKey) }
+        else                  { Keychain.save(normalized, forKey: provider.keychainKey) }
     }
 
     // MARK: - Resolved configs

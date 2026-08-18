@@ -191,6 +191,7 @@ final class AppState {
     var onGoalTranscribed: ((String) -> Void)?
 
     func startGoalRecording() {
+        guard recordingMode == .idle else { return }
         goalRecordingMode = true
         startRecording()
     }
@@ -259,12 +260,15 @@ final class AppState {
             recordingMode = .recording
             onRecordingChanged?(true)
         } catch {
+            goalRecordingMode = false
             errorMessage = error.localizedDescription
         }
     }
 
     func stopRecording() {
         guard recordingMode == .recording else { return }
+        let isGoalRecording = goalRecordingMode
+        goalRecordingMode = false
         audioCapture.stop()
         isRecording   = false
         recordingMode = .processing
@@ -361,13 +365,10 @@ final class AppState {
                 }
 
                 // Goal recording: deliver raw transcript directly, skip all LLM processing
-                if goalRecordingMode {
-                    goalRecordingMode = false
+                if isGoalRecording {
                     let goal = FillerWordFilter.filter(raw)
-                    Task { @MainActor [weak self] in
-                        self?.recordingMode = .idle
-                        self?.onGoalTranscribed?(goal)
-                    }
+                    recordingMode = .idle
+                    onGoalTranscribed?(goal)
                     return
                 }
 
@@ -432,6 +433,7 @@ final class AppState {
     func cancelRecording() {
         audioCapture.stop()
         audioCapture.cleanup()
+        goalRecordingMode       = false
         isRecording           = false
         recordingMode         = .idle
         audioLevel            = 0
@@ -453,19 +455,15 @@ final class AppState {
         Task {
             do {
                 try await localSTT.load(model) { progress, status in
-                    Task { @MainActor [weak self] in
-                        self?.localSTTOpState = progress < 1.0
+                    Task { @MainActor in
+                        self.localSTTOpState = progress < 1.0
                             ? .busy(progress: progress, status: status)
                             : .idle
                     }
                 }
-                Task { @MainActor [weak self] in
-                    self?.localSTTOpState = .idle
-                }
+                localSTTOpState = .idle
             } catch {
-                Task { @MainActor [weak self] in
-                    self?.localSTTOpState = .error(error.localizedDescription)
-                }
+                localSTTOpState = .error(error.localizedDescription)
             }
         }
     }
@@ -484,21 +482,17 @@ final class AppState {
         llmLoadTask = Task {
             do {
                 try await localLLM.load(model) { progress, status in
-                    Task { @MainActor [weak self] in
-                        self?.localLLMOpState = progress < 1.0
+                    Task { @MainActor in
+                        self.localLLMOpState = progress < 1.0
                             ? .busy(progress: progress, status: status)
                             : .idle
                     }
                 }
                 guard !Task.isCancelled else { return }
-                Task { @MainActor [weak self] in
-                    self?.localLLMOpState = .idle
-                }
+                localLLMOpState = .idle
             } catch {
                 guard !Task.isCancelled else { return }
-                Task { @MainActor [weak self] in
-                    self?.localLLMOpState = .error(error.localizedDescription)
-                }
+                localLLMOpState = .error(error.localizedDescription)
             }
         }
     }
@@ -536,8 +530,8 @@ final class AppState {
         localSTTOpState = .busy(progress: 0, status: "Starting…")
         do {
             try await localSTT.load(model) { p, s in
-                Task { @MainActor [weak self] in
-                    self?.localSTTOpState = p < 1 ? .busy(progress: p, status: s) : .idle
+                Task { @MainActor in
+                    self.localSTTOpState = p < 1 ? .busy(progress: p, status: s) : .idle
                 }
             }
             localSTTOpState = .idle
@@ -599,11 +593,12 @@ final class AppState {
 private enum FillerWordFilter {
     // Matches common vocal fillers (uh, um, er, hmm, etc.) plus optional trailing comma/period.
     // Word boundaries prevent clipping real words ("umbrella", "uh-oh", etc.).
-    private static let pattern = try! NSRegularExpression(
+    private static let pattern = try? NSRegularExpression(
         pattern: #"(?i)\b(u+h+|u+m+|e+r+|h?mm+|mhm)\b[,.]?\s*|uh-huh[,.]?\s*"#
     )
 
     static func filter(_ text: String) -> String {
+        guard let pattern else { return text }
         var result = pattern.stringByReplacingMatches(
             in: text,
             range: NSRange(text.startIndex..., in: text),
