@@ -45,6 +45,7 @@ struct MainWindowView: View {
                 case .dashboard, nil: DashboardView()
                 case .history:        HistoryView()
                 case .profiles:       ProfilesListView()
+                case .dictionary:     DictionaryView()
                 case .knowledgeBase:  KnowledgeBaseView()
                 }
             }
@@ -64,19 +65,21 @@ struct MainWindowView: View {
 // MARK: - Sidebar
 
 enum SidebarItem: String, CaseIterable, Identifiable, Hashable {
-    case dashboard     = "Dashboard"
+    case dashboard     = "Home"
     case history       = "History"
-    case profiles      = "App Profiles"
-    case knowledgeBase = "Knowledge Base"
+    case profiles      = "Profiles"
+    case dictionary    = "Dictionary"
+    case knowledgeBase = "Personal Context"
 
     var id: String { rawValue }
 
     var icon: String {
         switch self {
-        case .dashboard:     return "square.grid.2x2"
+        case .dashboard:     return "house"
         case .history:       return "clock"
-        case .profiles:      return "app.badge"
-        case .knowledgeBase: return "brain"
+        case .profiles:      return "slider.horizontal.3"
+        case .dictionary:    return "text.book.closed"
+        case .knowledgeBase: return "person.text.rectangle"
         }
     }
 }

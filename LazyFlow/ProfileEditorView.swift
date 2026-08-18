@@ -7,10 +7,17 @@ struct ProfilesListView: View {
     @Environment(AppState.self) private var appState
     @State private var selectedID:  String?
     @State private var showAddSheet = false
+    @State private var searchText = ""
 
     private var store: AppProfileStore { appState.profileStore }
     private var sorted: [AppProfile] {
-        store.profiles.values.sorted { $0.displayName.lowercased() < $1.displayName.lowercased() }
+        store.profiles.values
+            .filter {
+                searchText.isEmpty
+                    || $0.displayName.localizedCaseInsensitiveContains(searchText)
+                    || $0.bundleIdentifier.localizedCaseInsensitiveContains(searchText)
+            }
+            .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
     }
 
     var body: some View {
@@ -42,18 +49,23 @@ struct ProfilesListView: View {
     private var sidebar: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("App Profiles")
+                Text("Profiles")
                     .font(.headline)
                 Spacer()
                 Button { showAddSheet = true } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .foregroundStyle(Color.accentColor)
-                        .font(.title3)
+                    Image(systemName: "plus")
                 }
-                .buttonStyle(.plain)
+                .lazyFlowGlassButton()
+                .controlSize(.small)
+                .help("Add profile")
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
+
+            TextField("Search", text: $searchText)
+                .textFieldStyle(.roundedBorder)
+                .padding(.horizontal, 10)
+                .padding(.bottom, 9)
 
             Divider()
 
@@ -66,7 +78,7 @@ struct ProfilesListView: View {
                     Text("No profiles yet")
                         .foregroundStyle(.secondary)
                         .font(.subheadline)
-                    Text("Dictate in any app to auto-create one,\nor tap + to add one manually.")
+                    Text("profiles are created when you dictate in an app")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                         .multilineTextAlignment(.center)
@@ -94,7 +106,6 @@ struct ProfilesListView: View {
             }
         }
         .frame(width: 210)
-        .background(.background)
     }
 
     // MARK: - Detail
@@ -113,7 +124,7 @@ struct ProfilesListView: View {
             ContentUnavailableView(
                 "No Profile Selected",
                 systemImage: "app.badge",
-                description: Text("Select an app on the left, or tap + to add one.\nProfiles are also created automatically when you first dictate in an app.")
+                description: Text("select an app or add a profile")
             )
         }
     }
@@ -150,7 +161,7 @@ struct ProfileSidebarRow: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(isSelected ? Color.accentColor.opacity(0.12) : Color.clear)
+            .background(isSelected ? Color.accentColor.opacity(0.1) : Color.clear)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -192,28 +203,20 @@ struct ProfileDetailView: View {
     @Binding var profile: AppProfile
     let onDelete: () -> Void
 
-    @Environment(AppState.self) private var appState
-
     @State private var pendingInstructions = ""
     @State private var instructionsDirty   = false
     @State private var drafts:             [String: String] = [:]
     @State private var newVocabWord        = ""
-    @State private var newHeardWord        = ""   // "heard" side for correction pair
-    @State private var newCorrectWord      = ""   // "correct" side for correction pair
     @FocusState private var vocabFocused: Bool
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 28) {
                 header
-                Divider()
                 if profile.postProcessingEnabled {
                     toneSection
-                    Divider()
                     formattingSection
-                    Divider()
                     vocabularySection
-                    Divider()
                     instructionsSection
                 }
                 Spacer(minLength: 16)
@@ -243,7 +246,7 @@ struct ProfileDetailView: View {
                 Text(profile.bundleIdentifier).font(.caption).foregroundStyle(.tertiary)
             }
             Spacer()
-            Toggle("AI Cleanup", isOn: Binding(
+            Toggle("Cleanup", isOn: Binding(
                 get: { profile.postProcessingEnabled },
                 set: { on in
                     profile.postProcessingEnabled = on
@@ -265,16 +268,19 @@ struct ProfileDetailView: View {
 
     private var toneSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("Tone", systemImage: "slider.horizontal.3")
+            Text("Tone")
                 .font(.headline)
 
-            HStack(spacing: 6) {
+            Picker("Tone", selection: $profile.tone) {
                 ForEach(TonePreset.allCases) { preset in
-                    ToneChip(preset: preset, isSelected: profile.tone == preset) {
-                        profile.tone = preset
-                        profile.postProcessingEnabled = preset != .minimal
-                    }
+                    Label(preset.displayName, systemImage: preset.icon)
+                        .tag(preset)
                 }
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .onChange(of: profile.tone) { _, tone in
+                profile.postProcessingEnabled = tone != .minimal
             }
 
             Text(profile.tone.description)
@@ -288,10 +294,8 @@ struct ProfileDetailView: View {
 
     private var formattingSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("Formatting", systemImage: "text.alignleft")
+            Text("Formatting")
                 .font(.headline)
-            Text("Each option adds a specific instruction on top of the tone.")
-                .font(.caption).foregroundStyle(.secondary)
 
             if profile.tone == .code || profile.tone == .technical {
                 Text("Lowercase and filler-word options are not compatible with \(profile.tone.displayName) tone.")
@@ -315,7 +319,6 @@ struct ProfileDetailView: View {
                 FormattingToggleRow("Keep filler words",     "Preserve um, uh, like, you know",   isOn: $profile.formattingOptions.keepFillerWords)
                     .disabled(profile.tone == .formal || profile.tone == .code || profile.tone == .technical)
             }
-            .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
         }
     }
 
@@ -323,12 +326,11 @@ struct ProfileDetailView: View {
 
     private var vocabularySection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Vocabulary", systemImage: "character.book.closed")
+            Text("Protected terms")
                 .font(.headline)
 
-            // Protected terms (existing)
             VStack(alignment: .leading, spacing: 6) {
-                Text("Protected terms — preserved exactly as written")
+                Text("preserved exactly in transcription and cleanup")
                     .font(.caption).foregroundStyle(.secondary)
                 HStack {
                     TextField("Add term…", text: $newVocabWord)
@@ -340,62 +342,12 @@ struct ProfileDetailView: View {
                 }
                 if !profile.vocabulary.isEmpty {
                     FlowLayout(spacing: 6) {
-                        ForEach(profile.vocabulary, id: \.self) { word in
+                        ForEach(profile.vocabulary.sorted(by: {
+                            $0.localizedCaseInsensitiveCompare($1) == .orderedAscending
+                        }), id: \.self) { word in
                             VocabChip(word: word) { profile.vocabulary.removeAll { $0 == word } }
                         }
                     }
-                }
-            }
-
-            Divider()
-
-            // Correction pairs (new)
-            let appCorrections = appState.correctionStore.corrections(for: profile.bundleIdentifier)
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Correction pairs — what Whisper hears → what it should be")
-                    .font(.caption).foregroundStyle(.secondary)
-                HStack(spacing: 6) {
-                    TextField("Heard…", text: $newHeardWord)
-                        .textFieldStyle(.roundedBorder)
-                    Image(systemName: "arrow.right")
-                        .foregroundStyle(.tertiary)
-                    TextField("Correct…", text: $newCorrectWord)
-                        .textFieldStyle(.roundedBorder)
-                    Button("Add") { addCorrectionPair() }
-                        .disabled(newHeardWord.trimmingCharacters(in: .whitespaces).isEmpty
-                                  || newCorrectWord.trimmingCharacters(in: .whitespaces).isEmpty)
-                }
-                if !appCorrections.isEmpty {
-                    VStack(spacing: 0) {
-                        ForEach(appCorrections) { pair in
-                            HStack(spacing: 6) {
-                                Text("\"\(pair.heard)\"")
-                                    .font(.system(.caption, design: .monospaced))
-                                    .foregroundStyle(.secondary)
-                                Image(systemName: "arrow.right")
-                                    .font(.caption2).foregroundStyle(.tertiary)
-                                Text("\"\(pair.correct)\"")
-                                    .font(.system(.caption, design: .monospaced))
-                                Spacer()
-                                if pair.frequency > 0 {
-                                    Text("\(pair.frequency)×")
-                                        .font(.caption2).foregroundStyle(.tertiary)
-                                }
-                                Button {
-                                    appState.correctionStore.delete(pair.id)
-                                } label: {
-                                    Image(systemName: "xmark").font(.caption2)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            if pair.id != appCorrections.last?.id {
-                                Divider().padding(.leading, 10)
-                            }
-                        }
-                    }
-                    .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 7))
                 }
             }
         }
@@ -405,9 +357,9 @@ struct ProfileDetailView: View {
 
     private var instructionsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("Custom Instructions", systemImage: "text.badge.plus")
+            Text("Instructions")
                 .font(.headline)
-            Text("Layered on top of tone and formatting — not replacing them. E.g. \"always end with a period\" or \"use formal Tamil\".")
+            Text("applied after tone and formatting")
                 .font(.caption).foregroundStyle(.secondary)
 
             TextEditor(text: $pendingInstructions)
@@ -442,44 +394,13 @@ struct ProfileDetailView: View {
     }
 
     private func addWord() {
-        let w = newVocabWord.trimmingCharacters(in: .whitespaces)
-        guard !w.isEmpty, !profile.vocabulary.contains(w) else { return }
+        let w = newVocabWord.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !w.isEmpty,
+              !profile.vocabulary.contains(where: {
+                  $0.caseInsensitiveCompare(w) == .orderedSame
+              }) else { return }
         profile.vocabulary.append(w)
         newVocabWord = ""
-    }
-
-    private func addCorrectionPair() {
-        let heard   = newHeardWord.trimmingCharacters(in: .whitespaces)
-        let correct = newCorrectWord.trimmingCharacters(in: .whitespaces)
-        guard !heard.isEmpty, !correct.isEmpty else { return }
-        let entry = CorrectionEntry(heard: heard, correct: correct,
-                                    bundleIdentifier: profile.bundleIdentifier)
-        appState.correctionStore.add(entry)
-        newHeardWord  = ""
-        newCorrectWord = ""
-    }
-}
-
-// MARK: - Tone Chip
-
-struct ToneChip: View {
-    let preset:     TonePreset
-    let isSelected: Bool
-    let onSelect:   () -> Void
-
-    var body: some View {
-        Button(action: onSelect) {
-            HStack(spacing: 4) {
-                Image(systemName: preset.icon).font(.caption2)
-                Text(preset.displayName).font(.caption.weight(.medium))
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(isSelected ? Color.accentColor : Color.secondary.opacity(0.12),
-                        in: Capsule())
-            .foregroundStyle(isSelected ? Color.white : Color.primary)
-        }
-        .buttonStyle(.plain)
     }
 }
 
