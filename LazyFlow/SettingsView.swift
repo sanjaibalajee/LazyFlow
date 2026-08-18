@@ -8,6 +8,8 @@ struct SettingsView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
+                PermissionsSettingsSection()
+                Divider().padding(.horizontal, 20)
                 providerSection()
                 Divider().padding(.horizontal, 20)
                 transcriptionSection()

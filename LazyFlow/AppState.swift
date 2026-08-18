@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import AVFoundation
+import ApplicationServices
 import Observation
 
 @Observable
@@ -32,13 +33,74 @@ final class AppState {
 
     // MARK: - Groq API key (STT always uses Groq Whisper — kept for backward compat)
 
-    var apiKey: String = Keychain.load(forKey: "groq_api_key") ?? "" {
-        didSet {
-            apiKey.isEmpty
-                ? Keychain.delete(forKey: "groq_api_key")
-                : Keychain.save(apiKey, forKey: "groq_api_key")
-            providerStore.migrateGroqKey(apiKey)
+    var apiKey: String {
+        get { providerStore.apiKey(for: .groq) }
+        set { providerStore.setApiKey(newValue, for: .groq) }
+    }
+
+    // MARK: - Required permissions
+
+    var microphoneAuthorization = AVCaptureDevice.authorizationStatus(for: .audio)
+    var accessibilityAuthorization = AXIsProcessTrusted()
+
+    var hasMicrophonePermission: Bool { microphoneAuthorization == .authorized }
+    var hasAccessibilityPermission: Bool { accessibilityAuthorization }
+    var hasRequiredPermissions: Bool {
+        hasMicrophonePermission && hasAccessibilityPermission
+    }
+
+    func refreshPermissions() {
+        microphoneAuthorization = AVCaptureDevice.authorizationStatus(for: .audio)
+        accessibilityAuthorization = AXIsProcessTrusted()
+    }
+
+    /// Advances the user through the next missing permission. The main window and
+    /// Settings both call this same flow, so permission behavior stays consistent.
+    func setupPermissions() {
+        refreshPermissions()
+
+        switch microphoneAuthorization {
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .audio) { [weak self] _ in
+                DispatchQueue.main.async {
+                    self?.refreshPermissions()
+                    self?.requestAccessibilityPermissionIfNeeded()
+                }
+            }
+        case .denied, .restricted:
+            openPrivacySettings(anchor: "Privacy_Microphone")
+        case .authorized:
+            requestAccessibilityPermissionIfNeeded()
+        @unknown default:
+            openPrivacySettings(anchor: "Privacy_Microphone")
         }
+    }
+
+    func openPermissionSettings() {
+        refreshPermissions()
+        openPrivacySettings(
+            anchor: hasMicrophonePermission ? "Privacy_Accessibility" : "Privacy_Microphone"
+        )
+    }
+
+    private func requestAccessibilityPermissionIfNeeded() {
+        guard !AXIsProcessTrusted() else {
+            refreshPermissions()
+            return
+        }
+
+        let options: NSDictionary = [
+            kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true
+        ]
+        _ = AXIsProcessTrustedWithOptions(options)
+        refreshPermissions()
+    }
+
+    private func openPrivacySettings(anchor: String) {
+        guard let url = URL(
+            string: "x-apple.systempreferences:com.apple.preference.security?\(anchor)"
+        ) else { return }
+        NSWorkspace.shared.open(url)
     }
 
     // Cloud STT model (Groq Whisper only)
@@ -148,9 +210,17 @@ final class AppState {
     func startRecording() {
         guard recordingMode == .idle else { return }
 
+        refreshPermissions()
+        guard hasAccessibilityPermission else {
+            goalRecordingMode = false
+            errorMessage = "Accessibility access is required for the Right Option shortcut and text insertion."
+            return
+        }
+
         // Check microphone permission before doing anything else
         let micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
         if micStatus == .denied || micStatus == .restricted {
+            goalRecordingMode = false
             errorMessage = "Microphone access denied. Enable it in System Settings → Privacy & Security → Microphone."
             return
         }
@@ -158,6 +228,7 @@ final class AppState {
             AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
                 Task { @MainActor [weak self] in
                     guard granted else {
+                        self?.goalRecordingMode = false
                         self?.errorMessage = "Microphone access is required to use LazyFlow."
                         return
                     }

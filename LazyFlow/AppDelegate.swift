@@ -1,5 +1,4 @@
 import AppKit
-import AVFoundation
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     let appState               = AppState()
@@ -13,25 +12,37 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var agentTargetPid:     pid_t = 0   // captured before window steals focus
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        requestMicrophonePermission()
-        setupHotkeys()
+        appState.refreshPermissions()
+        configureHotkeys()
         observeRecordingState()
         appState.setupLocalServicesIfNeeded()
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        // Permission changes happen in System Settings while LazyFlow is inactive.
+        // Refresh and install the global monitor immediately when the user returns.
+        appState.refreshPermissions()
+        configureHotkeys()
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        hotkeyManager.stop()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return false
     }
 
-    // MARK: - Permissions
-
-    private func requestMicrophonePermission() {
-        AVCaptureDevice.requestAccess(for: .audio) { _ in }
+    /// Keep the menu-bar app and its global hotkeys alive while moving all app
+    /// windows out of the way. The explicit menu-bar Quit action still performs
+    /// a real termination, which Sparkle also needs when installing an update.
+    func runInBackground() {
+        NSApp.hide(nil)
     }
 
     // MARK: - Hotkeys
 
-    private func setupHotkeys() {
+    private func configureHotkeys() {
         hotkeyManager.onStartRecording  = { [weak self] in self?.appState.startRecording() }
         hotkeyManager.onStopRecording   = { [weak self] in self?.appState.stopRecording() }
         hotkeyManager.onCancelRecording = { [weak self] in self?.appState.cancelRecording() }
@@ -47,11 +58,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             DispatchQueue.main.async { self?.hotkeyManager.forceReset() }
         }
 
-        do {
-            try hotkeyManager.start()
-        } catch {
-            showPermissionAlert(message: error.localizedDescription)
+        guard appState.hasAccessibilityPermission else {
+            hotkeyManager.stop()
+            return
         }
+
+        do { try hotkeyManager.start() }
+        catch { appState.errorMessage = error.localizedDescription }
     }
 
     // MARK: - Overlay
@@ -129,21 +142,4 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    // MARK: - Alert
-
-    private func showPermissionAlert(message: String) {
-        DispatchQueue.main.async {
-            let alert = NSAlert()
-            alert.messageText     = "Permission Required"
-            alert.informativeText = message
-            alert.alertStyle      = .warning
-            alert.addButton(withTitle: "Open Settings")
-            alert.addButton(withTitle: "Later")
-            if alert.runModal() == .alertFirstButtonReturn {
-                NSWorkspace.shared.open(
-                    URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
-                )
-            }
-        }
-    }
 }

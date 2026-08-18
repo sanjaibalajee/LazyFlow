@@ -9,6 +9,25 @@ struct MainWindowView: View {
     @State private var monitor = SystemMonitor()
 
     var body: some View {
+        Group {
+            if appState.hasRequiredPermissions {
+                mainContent
+            } else {
+                PermissionsSetupView()
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: appState.hasRequiredPermissions)
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            appState.refreshPermissions()
+        }
+        .onAppear {
+            appState.refreshPermissions()
+            monitor.start()
+        }
+        .onDisappear { monitor.stop() }
+    }
+
+    private var mainContent: some View {
         VStack(spacing: 0) {
             NavigationSplitView {
                 List(SidebarItem.allCases, selection: $selection) { item in
@@ -39,8 +58,6 @@ struct MainWindowView: View {
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showMonitor)
         .environment(monitor)
-        .onAppear { monitor.start() }
-        .onDisappear { monitor.stop() }
     }
 }
 
