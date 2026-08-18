@@ -2,8 +2,6 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
-    @State private var apiKeyVisible = false
-    @State private var customLLMText = ""
 
     var body: some View {
         ScrollView {
@@ -24,7 +22,6 @@ struct SettingsView: View {
 
     @ViewBuilder
     private func providerSection() -> some View {
-        @Bindable var store = appState.providerStore
         VStack(alignment: .leading, spacing: 16) {
             SectionHeader(icon: "wand.and.stars", title: "AI Providers")
             Text("Keys stored in the system Keychain. Click the lock to edit a key.")
@@ -35,37 +32,11 @@ struct SettingsView: View {
             VStack(spacing: 0) {
                 ForEach(providers) { provider in
                     ProviderKeyRow(provider: provider, store: appState.providerStore)
-                    if provider != providers.last { Divider().padding(.leading, 34) }
+                    Divider().padding(.leading, 34)
                 }
+                ProviderKeyRow(transcriptionProvider: .elevenLabs, store: appState.providerStore)
             }
             .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
-
-            // Dictation: Groq-only, model picker only
-            VStack(alignment: .leading, spacing: 6) {
-                Label("Dictation Model", systemImage: "waveform.badge.mic")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.secondary)
-
-                HStack(spacing: 8) {
-                    Text("Groq")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.tertiary)
-                        .frame(width: 36, alignment: .leading)
-
-                    Picker("", selection: $store.dictationModel) {
-                        ForEach(LLMProvider.groq.presetModels) { m in
-                            HStack {
-                                Text(m.name)
-                                if let b = m.badge {
-                                    Text("· \(b)").foregroundStyle(.secondary).font(.caption)
-                                }
-                            }.tag(m.id)
-                        }
-                    }
-                    .labelsHidden()
-                    .frame(width: 200)
-                }
-            }
 
             // Agent: full provider + model picker
             AgentModelPicker(store: appState.providerStore)
@@ -78,23 +49,47 @@ struct SettingsView: View {
     @ViewBuilder
     private func transcriptionSection() -> some View {
         @Bindable var appState = appState
+        @Bindable var store = appState.providerStore
         VStack(alignment: .leading, spacing: 14) {
             SectionHeader(icon: "waveform", title: "Transcription")
 
             Picker("", selection: $appState.sttBackend) {
-                Text("Cloud (Groq)").tag(STTBackend.cloud)
+                Text("Cloud").tag(STTBackend.cloud)
                 Text("On-device").tag(STTBackend.local)
             }
             .pickerStyle(.segmented).labelsHidden()
 
             if appState.sttBackend == .cloud {
-                HStack(spacing: 10) {
-                    ForEach(Self.cloudSTTModels) { m in
-                        CloudModelCard(
-                            name: m.name, badge: m.badge, badgeColor: m.badgeColor,
-                            modelID: m.id, detail: m.detail,
-                            isSelected: appState.sttModel == m.id
-                        ) { appState.sttModel = m.id }
+                VStack(alignment: .leading, spacing: 10) {
+                    Picker("Provider", selection: $store.transcriptionProvider) {
+                        ForEach(TranscriptionProvider.allCases) { provider in
+                            Label(provider.displayName, systemImage: provider.icon).tag(provider)
+                        }
+                    }
+                    .onChange(of: store.transcriptionProvider) { _, provider in
+                        store.transcriptionModel = provider.defaultModel
+                    }
+
+                    HStack(spacing: 10) {
+                        ForEach(store.transcriptionProvider.models) { model in
+                            CloudModelCard(
+                                name: model.name,
+                                badge: model.badge,
+                                badgeColor: transcriptionBadgeColor(model.badge),
+                                modelID: model.id,
+                                detail: model.detail,
+                                isSelected: store.transcriptionModel == model.id
+                            ) { store.transcriptionModel = model.id }
+                        }
+                    }
+
+                    if appState.providerStore.apiKey(for: store.transcriptionProvider).isEmpty {
+                        Label(
+                            "Add a \(store.transcriptionProvider.displayName) API key above before recording.",
+                            systemImage: "key"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     }
                 }
             } else {
@@ -117,13 +112,13 @@ struct SettingsView: View {
             SectionHeader(icon: "cpu", title: "Post-processing")
 
             Picker("", selection: $appState.llmBackend) {
-                Text("Cloud (Groq)").tag(LLMBackend.cloud)
+                Text("Cloud").tag(LLMBackend.cloud)
                 Text("On-device (MLX)").tag(LLMBackend.local)
             }
             .pickerStyle(.segmented).labelsHidden()
 
             if appState.llmBackend == .cloud {
-                cloudLLMSection()
+                DictationModelPicker(store: appState.providerStore)
             } else {
                 VStack(spacing: 8) {
                     ForEach(LocalLLMModel.allCases) { model in
@@ -137,106 +132,62 @@ struct SettingsView: View {
         .padding(20)
     }
 
-    @ViewBuilder
-    private func cloudLLMSection() -> some View {
-        @Bindable var appState = appState
-        VStack(alignment: .leading, spacing: 10) {
-            VStack(spacing: 0) {
-                ForEach(Self.cloudLLMPresets) { preset in
-                    let isSelected = appState.llmModel == preset.id && customLLMText.isEmpty
-                    Button {
-                        appState.llmModel = preset.id; customLLMText = ""
-                    } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                                .font(.system(size: 15))
-                                .foregroundStyle(isSelected ? Color.accentColor : Color.secondary.opacity(0.4))
-                                .frame(width: 18)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(preset.name).font(.system(size: 13, weight: .medium)).foregroundStyle(.primary)
-                                Text(preset.description).font(.system(size: 11)).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Text(preset.id).font(.system(size: 10, design: .monospaced)).foregroundStyle(.tertiary).lineLimit(1)
-                        }
-                        .padding(.horizontal, 12).padding(.vertical, 8).contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .background(isSelected ? Color.accentColor.opacity(0.06) : Color.clear)
-                    if preset.id != Self.cloudLLMPresets.last?.id { Divider().padding(.leading, 40) }
-                }
-            }
-            .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Custom model ID").font(.caption).foregroundStyle(.secondary)
-                HStack(spacing: 8) {
-                    TextField("e.g. llama-3.1-70b-versatile", text: $customLLMText)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(.body, design: .monospaced))
-                        .onChange(of: customLLMText) { _, val in
-                            let t = val.trimmingCharacters(in: .whitespaces)
-                            guard !t.isEmpty else { return }
-                            appState.llmModel = t
-                        }
-                    if !customLLMText.isEmpty {
-                        Button { customLLMText = ""; appState.llmModel = Self.cloudLLMPresets[0].id } label: {
-                            Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
-                        }.buttonStyle(.plain)
-                    }
-                }
-                Text("Any model on your Groq account. See [console.groq.com/docs/models](https://console.groq.com/docs/models)")
-                    .font(.caption).foregroundStyle(.tertiary)
-            }
+    private func transcriptionBadgeColor(_ badge: String) -> Color {
+        switch badge {
+        case "Fast":         .green
+        case "Multilingual": .purple
+        default:             .blue
         }
     }
-
-    // MARK: - Static model data
-
-    struct CloudSTTModel: Identifiable {
-        let id: String; let name: String; let badge: String; let badgeColor: Color; let detail: String
-    }
-    static let cloudSTTModels: [CloudSTTModel] = [
-        .init(id: "whisper-large-v3",       name: "Large v3",    badge: "Accurate", badgeColor: .blue,
-              detail: "Highest accuracy across all languages. Best for technical content. ~2–4s slower."),
-        .init(id: "whisper-large-v3-turbo", name: "Large Turbo", badge: "Fast",     badgeColor: .green,
-              detail: "6× faster with very good accuracy. Ideal for everyday use."),
-    ]
-
-    struct CloudLLMPreset: Identifiable {
-        let id: String; let name: String; let description: String
-    }
-    static let cloudLLMPresets: [CloudLLMPreset] = [
-        .init(id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B",        description: "Best quality · recommended default"),
-        .init(id: "llama-3.1-8b-instant",    name: "Llama 3.1 8B Instant", description: "Fastest · lowest latency"),
-        .init(id: "gemma2-9b-it",            name: "Gemma 2 9B",           description: "Compact, fast, accurate"),
-        .init(id: "mixtral-8x7b-32768",      name: "Mixtral 8×7B",         description: "Strong on longer content"),
-        .init(id: "openai/gpt-oss-20b",      name: "GPT OSS 20B",          description: "Previous default · OpenAI via Groq"),
-    ]
 }
 
 // MARK: - Provider key row (locked by default, unlock to edit)
 
 private struct ProviderKeyRow: View {
-    let provider:    LLMProvider
+    let provider: LLMProvider?
+    let transcriptionProvider: TranscriptionProvider?
     @Bindable var store: LLMProviderStore
 
     @State private var isEditing = false
     @State private var draft     = ""
     @FocusState private var fieldFocused: Bool
 
-    private var storedKey: String { store.apiKey(for: provider) }
+    init(provider: LLMProvider, store: LLMProviderStore) {
+        self.provider = provider
+        self.transcriptionProvider = nil
+        self.store = store
+    }
+
+    init(transcriptionProvider: TranscriptionProvider, store: LLMProviderStore) {
+        self.provider = nil
+        self.transcriptionProvider = transcriptionProvider
+        self.store = store
+    }
+
+    private var storedKey: String {
+        if let provider { return store.apiKey(for: provider) }
+        if let transcriptionProvider { return store.apiKey(for: transcriptionProvider) }
+        return ""
+    }
     private var hasKey:    Bool   { !storedKey.isEmpty }
+
+    private var displayName: String {
+        provider?.displayName ?? transcriptionProvider?.displayName ?? "Provider"
+    }
+
+    private var icon: String {
+        provider?.icon ?? transcriptionProvider?.icon ?? "key"
+    }
 
     var body: some View {
         HStack(spacing: 10) {
             // Provider identity
-            Image(systemName: provider.icon)
+            Image(systemName: icon)
                 .font(.system(size: 11))
                 .foregroundStyle(hasKey ? Color.accentColor : Color.secondary)
                 .frame(width: 20)
 
-            Text(provider.displayName)
+            Text(displayName)
                 .font(.system(size: 13))
                 .frame(width: 124, alignment: .leading)
 
@@ -300,19 +251,93 @@ private struct ProviderKeyRow: View {
 
     private func save() {
         let trimmed = draft.trimmingCharacters(in: .whitespaces)
-        if !trimmed.isEmpty { store.setApiKey(trimmed, for: provider) }
+        if !trimmed.isEmpty {
+            if let provider { store.setApiKey(trimmed, for: provider) }
+            else if let transcriptionProvider { store.setApiKey(trimmed, for: transcriptionProvider) }
+        }
         draft = ""
         isEditing = false
     }
 
     private var keyPlaceholder: String {
-        switch provider {
+        if transcriptionProvider == .elevenLabs { return "sk_…" }
+        guard let provider else { return "API key" }
+        return switch provider {
         case .groq:      "gsk_…"
         case .openai:    "sk-…"
         case .google:    "AIza…"
         case .anthropic: "sk-ant-…"
         default:         "API key"
         }
+    }
+}
+
+// MARK: - Dictation model picker (full provider + model)
+
+private struct DictationModelPicker: View {
+    @Bindable var store: LLMProviderStore
+    @State private var customModel = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Cleanup Model", systemImage: "text.badge.checkmark")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 8) {
+                Picker("Provider", selection: $store.dictationProvider) {
+                    ForEach(LLMProvider.allCases.filter { $0 != .custom && $0 != .anthropic }) { provider in
+                        Text(provider.displayName).tag(provider)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 150)
+                .onChange(of: store.dictationProvider) { _, provider in
+                    store.dictationModel = provider.defaultModel(for: .dictation)
+                    customModel = ""
+                }
+
+                Picker("Model", selection: $store.dictationModel) {
+                    ForEach(store.dictationProvider.presetModels) { model in
+                        HStack {
+                            Text(model.name)
+                            if let badge = model.badge {
+                                Text("· \(badge)").foregroundStyle(.secondary).font(.caption)
+                            }
+                        }
+                        .tag(model.id)
+                    }
+                }
+                .labelsHidden()
+                .frame(maxWidth: .infinity)
+                .onChange(of: store.dictationModel) { _, model in
+                    if store.dictationProvider.presetModels.contains(where: { $0.id == model }) {
+                        customModel = ""
+                    }
+                }
+            }
+
+            HStack(spacing: 8) {
+                TextField("Custom model ID", text: $customModel)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(.body, design: .monospaced))
+                    .onSubmit { applyCustomModel() }
+                Button("Use") { applyCustomModel() }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(customModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+
+            Text("Groq remains available. OpenAI includes GPT-5.6 Luna and smaller GPT-5.4 models for cost-focused cleanup.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func applyCustomModel() {
+        let normalized = customModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return }
+        store.dictationModel = normalized
     }
 }
 

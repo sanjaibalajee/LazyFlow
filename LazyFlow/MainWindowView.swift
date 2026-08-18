@@ -286,7 +286,7 @@ struct PipelineStatusView: View {
             modelStatus(
                 label: "speech",
                 value: appState.sttBackend == .cloud
-                    ? appState.sttModel.replacingOccurrences(of: "whisper-", with: "")
+                    ? "\(appState.sttProvider.displayName) · \(appState.sttModel.replacingOccurrences(of: "whisper-", with: ""))"
                     : appState.localSTTModel.displayName,
                 isCloud: appState.sttBackend == .cloud
             )

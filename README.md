@@ -8,7 +8,7 @@ hold right ⌥, speak, release. lazyflow transcribes, applies the active app pro
 
 - macos 14+
 - microphone and accessibility permissions
-- groq api key when using groq models
+- an api key for the selected cloud provider
 
 ## setup
 
@@ -38,7 +38,8 @@ app profiles define tone, formatting, protected terms, correction pairs, and cus
 - transcripts and corrections: sqlite in `~/Library/Application Support/LazyFlow/`
 - profiles: user defaults
 - telemetry: none
-- groq mode sends audio for transcription and text for cleanup
+- cloud transcription sends audio to the selected groq, openai, or elevenlabs provider
+- cloud cleanup sends text to the selected llm provider
 
 ## release
 
