@@ -88,58 +88,90 @@ enum SidebarItem: String, CaseIterable, Identifiable, Hashable {
 
 struct DashboardView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
+            VStack(alignment: .leading, spacing: 24) {
+                header
+                metrics
+                Divider()
+                PipelineStatusView()
+                Divider()
 
-                // Greeting
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(greeting)
-                        .font(.largeTitle).bold()
-                    Text("Here's what you've been dictating.")
-                        .foregroundStyle(.secondary)
-                }
-
-                // Stats
-                HStack(spacing: 12) {
-                    StatCard(icon: "mic.fill",    color: .blue,
-                             value: "\(todayCount)",        label: "Today")
-                    StatCard(icon: "calendar",    color: .purple,
-                             value: "\(weekCount)",         label: "This week")
-                    StatCard(icon: "doc.text",    color: .green,
-                             value: "\(appState.history.count)", label: "All time")
-                    StatCard(icon: "textformat",  color: .orange,
-                             value: "\(totalWords)",        label: "Words")
-                }
-
-                // Inference status
-                InferenceStatusCard()
-
-                // Recent
                 if appState.history.isEmpty {
                     emptyState
                 } else {
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text("Recent").font(.headline)
-                            Spacer()
-                        }
-                        VStack(spacing: 0) {
-                            ForEach(appState.history.prefix(8)) { entry in
-                                TranscriptRow(entry: entry)
-                                if entry.id != appState.history.prefix(8).last?.id {
-                                    Divider().padding(.leading, 44)
-                                }
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Recent")
+                            .font(.headline)
+
+                        ForEach(appState.history.prefix(8)) { entry in
+                            TranscriptRow(entry: entry)
+                                .padding(.vertical, 4)
+                            if entry.id != appState.history.prefix(8).last?.id {
+                                Divider().padding(.leading, 40)
                             }
                         }
-                        .background(.background, in: RoundedRectangle(cornerRadius: 10))
-                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(.separator, lineWidth: 0.5))
                     }
                 }
             }
-            .padding(24)
+            .padding(.horizontal, 28)
+            .padding(.vertical, 26)
+            .frame(maxWidth: 920, alignment: .leading)
         }
+    }
+
+    private var header: some View {
+        HStack(alignment: .center, spacing: 20) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(statusTitle)
+                    .font(.system(size: 32, weight: .semibold, design: .rounded))
+                Text(statusSubtitle)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Button {
+                if appState.isRecording {
+                    appState.stopRecording()
+                } else if appState.recordingMode != .processing {
+                    appState.startRecording()
+                }
+            } label: {
+                Label(
+                    appState.isRecording ? "Stop" : "Dictate",
+                    systemImage: appState.isRecording ? "stop.fill" : "mic.fill"
+                )
+                .font(.system(size: 14, weight: .semibold))
+                .frame(minWidth: 92)
+            }
+            .lazyFlowGlassButton(prominent: !appState.isRecording)
+            .controlSize(.large)
+            .tint(appState.isRecording ? .red : .accentColor)
+            .disabled(appState.recordingMode == .processing)
+            .keyboardShortcut("r", modifiers: [.command, .shift])
+        }
+    }
+
+    private var metrics: some View {
+        HStack(spacing: 0) {
+            Metric(value: "\(todayCount)", label: "today")
+            metricDivider
+            Metric(value: "\(weekCount)", label: "this week")
+            metricDivider
+            Metric(value: "\(appState.history.count)", label: "transcripts")
+            metricDivider
+            Metric(value: totalWords.formatted(), label: "words")
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var metricDivider: some View {
+        Divider()
+            .frame(height: 28)
+            .padding(.horizontal, 22)
     }
 
     private var emptyState: some View {
@@ -150,7 +182,7 @@ struct DashboardView: View {
             Text("No transcripts yet")
                 .font(.headline)
                 .foregroundStyle(.secondary)
-            Text("Hold Right ⌥ anywhere to start dictating.\nYour transcripts will appear here.")
+            Text("hold right ⌥ anywhere to start dictating")
                 .font(.subheadline)
                 .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
@@ -159,12 +191,19 @@ struct DashboardView: View {
         .padding(.vertical, 48)
     }
 
-    private var greeting: String {
-        let h = Calendar.current.component(.hour, from: Date())
-        switch h {
-        case 0..<12:  return "Good morning."
-        case 12..<17: return "Good afternoon."
-        default:      return "Good evening."
+    private var statusTitle: String {
+        switch appState.recordingMode {
+        case .recording:  return "listening"
+        case .processing: return "processing"
+        case .idle:       return "ready"
+        }
+    }
+
+    private var statusSubtitle: String {
+        switch appState.recordingMode {
+        case .recording:  return "release right ⌥ or stop when done"
+        case .processing: return "transcribing and applying the active profile"
+        case .idle:       return "hold right ⌥ to dictate in any app"
         }
     }
 
@@ -178,6 +217,23 @@ struct DashboardView: View {
 
     private var totalWords: Int {
         appState.history.reduce(0) { $0 + $1.text.split(separator: " ").count }
+    }
+}
+
+private struct Metric: View {
+    let value: String
+    let label: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value)
+                .font(.system(size: 20, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -214,124 +270,62 @@ private struct MonitorToggleButton: View {
     }
 }
 
-// MARK: - Inference Status Card
+// MARK: - Pipeline Status
 
-struct InferenceStatusCard: View {
+struct PipelineStatusView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Label("Inference", systemImage: "cpu").font(.headline)
-                Spacer()
-                Button { openSettings() } label: {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .help("Open Settings")
+        HStack(spacing: 16) {
+            Label("Pipeline", systemImage: "point.3.connected.trianglepath.dotted")
+                .font(.headline)
+
+            Spacer(minLength: 8)
+
+            modelStatus(
+                label: "speech",
+                value: appState.sttBackend == .cloud
+                    ? appState.sttModel.replacingOccurrences(of: "whisper-", with: "")
+                    : appState.localSTTModel.displayName,
+                isCloud: appState.sttBackend == .cloud
+            )
+
+            Divider().frame(height: 24)
+
+            modelStatus(
+                label: "cleanup",
+                value: appState.llmBackend == .cloud
+                    ? String(appState.llmModel.split(separator: "-").prefix(3).joined(separator: "-"))
+                    : appState.localLLMModel.displayName,
+                isCloud: appState.llmBackend == .cloud
+            )
+
+            Button { openSettings() } label: {
+                Image(systemName: "gearshape")
             }
-
-            HStack(spacing: 0) {
-                modelRow(icon: "waveform",
-                         label: "STT",
-                         backend: appState.sttBackend == .cloud ? nil
-                             : LocalSTTService.isDownloaded(appState.localSTTModel) && appState.localSTTOpState == .idle
-                                 ? appState.localSTTModel.displayName : nil,
-                         cloudLabel: appState.sttModel.replacingOccurrences(of: "whisper-", with: ""),
-                         isCloud: appState.sttBackend == .cloud,
-                         opState: appState.localSTTOpState,
-                         onDownload: { appState.loadLocalSTT(appState.localSTTModel) })
-
-                Divider().frame(height: 32).padding(.horizontal, 12)
-
-                modelRow(icon: "sparkles",
-                         label: "LLM",
-                         backend: appState.llmBackend == .cloud ? nil
-                             : LocalLLMService.isDownloaded(appState.localLLMModel) && appState.localLLMOpState == .idle
-                                 ? appState.localLLMModel.displayName : nil,
-                         cloudLabel: String(appState.llmModel.split(separator: "-").prefix(3).joined(separator: "-")),
-                         isCloud: appState.llmBackend == .cloud,
-                         opState: appState.localLLMOpState,
-                         onDownload: { appState.loadLocalLLM(appState.localLLMModel) })
-            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .help("Open Settings")
         }
-        .padding(16)
-        .background(.background, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(.separator, lineWidth: 0.5))
+        .padding(.vertical, 2)
     }
 
-    @ViewBuilder
-    private func modelRow(icon: String, label: String, backend: String?,
-                          cloudLabel: String, isCloud: Bool,
-                          opState: LocalOpState,
-                          onDownload: @escaping () -> Void) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-                .frame(width: 16)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.tertiary)
-                    .textCase(.uppercase)
-
-                if isCloud {
-                    Text(cloudLabel).font(.system(size: 12)).foregroundStyle(.secondary)
-                } else if case .busy(let p, let s) = opState {
-                    VStack(alignment: .leading, spacing: 2) {
-                        ProgressView(value: p).tint(.accentColor).frame(width: 80)
-                        Text(s).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
-                    }
-                } else if let name = backend, opState == .idle {
-                    HStack(spacing: 4) {
-                        Circle().fill(.green).frame(width: 6, height: 6)
-                        Text(name).font(.system(size: 12))
-                    }
-                } else {
-                    Button("Download") { onDownload() }
-                        .buttonStyle(.bordered).controlSize(.mini)
-                }
-            }
-
-            if isCloud {
-                Image(systemName: "cloud")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-// MARK: - Stat Card
-
-struct StatCard: View {
-    let icon:  String
-    let color: Color
-    let value: String
-    let label: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundStyle(color)
-            Spacer()
-            Text(value)
-                .font(.system(size: 26, weight: .bold, design: .rounded))
+    private func modelStatus(label: String, value: String, isCloud: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
             Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+            HStack(spacing: 5) {
+                Image(systemName: isCloud ? "cloud" : "apple.silicon")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text(value)
+                    .font(.caption)
+                    .lineLimit(1)
+            }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, minHeight: 110, alignment: .leading)
-        .background(.background, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(.separator, lineWidth: 0.5))
+        .frame(width: 150, alignment: .leading)
     }
 }
 
