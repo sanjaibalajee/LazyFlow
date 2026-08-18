@@ -1,5 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
-<dict/>
+<dict>
+	<key>NSAccessibilityUsageDescription</key>
+	<string>LazyFlow uses Accessibility to detect the Right Option shortcut and insert transcribed text.</string>
+	<key>SUFeedURL</key>
+	<string>https://github.com/sanjaibalajee/LazyFlow/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>fhOr4ChSyTPNNwy+V2BXGVkC5gjxa9KEQl84q4EhAAc=</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUAutomaticallyUpdate</key>
+	<true/>
+</dict>
 </plist>
