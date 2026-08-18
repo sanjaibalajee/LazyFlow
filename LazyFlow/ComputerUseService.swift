@@ -358,7 +358,7 @@ actor ComputerUseService {
         print("[Agent] 👁 see() — found \(elements.count) elements")
         for e in elements.prefix(8) { print("  \(e.id): \(e.elementDescription)") }
 
-        let screenshot = await MainActor.run { ScreenshotService.captureFrontmost() }
+        let screenshot = await ScreenshotService.captureFrontmost()
         let screenshotSize = screenshot.map { "\($0.count / 1024)KB" } ?? "nil"
         print("[Agent] 📸 screenshot: \(screenshotSize)")
         lastScreenshot = screenshot
