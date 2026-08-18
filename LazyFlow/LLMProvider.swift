@@ -60,11 +60,13 @@ enum LLMProvider: String, CaseIterable, Codable, Identifiable, Hashable {
             ]
         case .openai:
             return [
+                LLMModel(id: "gpt-5.6-luna",  name: "GPT-5.6 Luna",  vision: true,  tools: true,  badge: "Recommended"),
+                LLMModel(id: "gpt-5.4-mini",  name: "GPT-5.4 mini",  vision: true,  tools: true,  badge: "Balanced"),
+                LLMModel(id: "gpt-5.4-nano",  name: "GPT-5.4 nano",  vision: true,  tools: true,  badge: "Cheapest"),
                 LLMModel(id: "gpt-4.1",      name: "GPT-4.1",      vision: true,  tools: true,  badge: "Best"),
                 LLMModel(id: "gpt-4.1-mini", name: "GPT-4.1 mini", vision: true,  tools: true,  badge: "Fast"),
                 LLMModel(id: "gpt-4o",       name: "GPT-4o",       vision: true,  tools: true,  badge: "Stable"),
                 LLMModel(id: "gpt-4o-mini",  name: "GPT-4o mini",  vision: true,  tools: true,  badge: "Cheap"),
-                LLMModel(id: "o4-mini",      name: "o4 mini",      vision: true,  tools: true,  badge: "Reasoning"),
                 LLMModel(id: "o3",           name: "o3",            vision: true,  tools: true,  badge: "Powerful"),
             ]
         case .google:
@@ -90,7 +92,7 @@ enum LLMProvider: String, CaseIterable, Codable, Identifiable, Hashable {
         switch (self, usage) {
         case (.groq, .dictation):    "llama-3.3-70b-versatile"
         case (.groq, .agent):        "meta-llama/llama-4-scout-17b-16e-instruct"
-        case (.openai, .dictation):  "gpt-4.1-mini"
+        case (.openai, .dictation):  "gpt-5.6-luna"
         case (.openai, .agent):      "gpt-4.1"
         case (.google, .dictation):  "gemini-2.5-flash"
         case (.google, .agent):      "gemini-2.5-pro"

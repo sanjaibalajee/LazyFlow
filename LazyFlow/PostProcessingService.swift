@@ -86,14 +86,20 @@ struct PostProcessingService {
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json",  forHTTPHeaderField: "Content-Type")
 
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "model": model,
             "messages": [
                 ["role": "system", "content": systemPrompt],
                 ["role": "user",   "content": userMessage]
-            ],
-            "temperature": 0.0
+            ]
         ]
+        if model.hasPrefix("gpt-5.") {
+            // GPT-5 reasoning models use an explicit low-latency reasoning setting for
+            // deterministic transcript cleanup. Sampling parameters are intentionally omitted.
+            body["reasoning_effort"] = "none"
+        } else {
+            body["temperature"] = 0.0
+        }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let (data, response) = try await URLSession.shared.data(for: request)
