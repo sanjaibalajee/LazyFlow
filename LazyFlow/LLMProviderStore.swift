@@ -12,6 +12,8 @@ final class LLMProviderStore {
     /// another Keychain lookup.
     @ObservationIgnored private var cachedAPIKeys: [LLMProvider: String] = [:]
     @ObservationIgnored private var loadedAPIKeys: Set<LLMProvider> = []
+    @ObservationIgnored private var cachedElevenLabsKey = ""
+    @ObservationIgnored private var loadedElevenLabsKey = false
 
     // MARK: - Persisted selections
 
@@ -20,6 +22,24 @@ final class LLMProviderStore {
     }
     var dictationModel: String = UserDefaults.standard.string(forKey: "lf_dict_model") ?? LLMProvider.groq.defaultModel(for: .dictation) {
         didSet { UserDefaults.standard.set(dictationModel, forKey: "lf_dict_model") }
+    }
+
+    var transcriptionProvider: TranscriptionProvider = {
+        let raw = UserDefaults.standard.string(forKey: "lf_stt_provider") ?? ""
+        return TranscriptionProvider(rawValue: raw) ?? .groq
+    }() {
+        didSet { UserDefaults.standard.set(transcriptionProvider.rawValue, forKey: "lf_stt_provider") }
+    }
+
+    var transcriptionModel: String = {
+        let raw = UserDefaults.standard.string(forKey: "lf_stt_provider") ?? ""
+        let provider = TranscriptionProvider(rawValue: raw) ?? .groq
+        let stored = UserDefaults.standard.string(forKey: "lf_stt_model")
+            ?? UserDefaults.standard.string(forKey: "lazyflow_stt_model")
+            ?? ""
+        return provider.models.contains(where: { $0.id == stored }) ? stored : provider.defaultModel
+    }() {
+        didSet { UserDefaults.standard.set(transcriptionModel, forKey: "lf_stt_model") }
     }
 
     var agentProvider: LLMProvider = LLMProvider(rawValue: UserDefaults.standard.string(forKey: "lf_agent_provider") ?? "") ?? .groq {
@@ -80,6 +100,30 @@ final class LLMProviderStore {
         else                  { Keychain.save(normalized, forKey: provider.keychainKey) }
     }
 
+    func apiKey(for provider: TranscriptionProvider) -> String {
+        if let credentialProvider = provider.credentialProvider {
+            return apiKey(for: credentialProvider)
+        }
+        if loadedElevenLabsKey { return cachedElevenLabsKey }
+
+        loadedElevenLabsKey = true
+        cachedElevenLabsKey = Keychain.load(forKey: provider.keychainKey) ?? ""
+        return cachedElevenLabsKey
+    }
+
+    func setApiKey(_ key: String, for provider: TranscriptionProvider) {
+        if let credentialProvider = provider.credentialProvider {
+            setApiKey(key, for: credentialProvider)
+            return
+        }
+
+        let normalized = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        loadedElevenLabsKey = true
+        cachedElevenLabsKey = normalized
+        if normalized.isEmpty { Keychain.delete(forKey: provider.keychainKey) }
+        else                  { Keychain.save(normalized, forKey: provider.keychainKey) }
+    }
+
     // MARK: - Resolved configs
 
     func config(for usage: LLMUsage) -> LLMConfig {
@@ -91,11 +135,19 @@ final class LLMProviderStore {
         return LLMConfig(provider: provider, baseURL: baseURL, apiKey: key, model: modelId, modelSpec: spec)
     }
 
+    var transcriptionConfig: TranscriptionConfig {
+        TranscriptionConfig(
+            provider: transcriptionProvider,
+            apiKey: apiKey(for: transcriptionProvider),
+            model: transcriptionModel
+        )
+    }
+
     // MARK: - Migration: import legacy Groq key
 
     func migrateGroqKey(_ key: String) {
-        guard !key.isEmpty, apiKey(for: .groq).isEmpty else { return }
-        setApiKey(key, for: .groq)
+        guard !key.isEmpty, apiKey(for: LLMProvider.groq).isEmpty else { return }
+        setApiKey(key, for: LLMProvider.groq)
     }
 
     // MARK: - Convenience

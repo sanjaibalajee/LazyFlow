@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - STT
 
 enum STTBackend: String, Codable {
-    case cloud  // Groq Whisper API
+    case cloud  // Configured cloud transcription provider
     case local  // On-device (Parakeet v3 / WhisperKit)
 }
 
@@ -70,7 +70,7 @@ enum LocalSTTModel: String, CaseIterable, Codable, Identifiable {
 // MARK: - LLM
 
 enum LLMBackend: String, Codable {
-    case cloud  // Groq API
+    case cloud  // Configured cloud LLM provider
     case local  // MLX on-device
 }
 
