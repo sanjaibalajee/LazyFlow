@@ -9,19 +9,8 @@ struct MainWindowView: View {
     @State private var monitor = SystemMonitor()
 
     var body: some View {
-        Group {
-            if appState.hasRequiredPermissions {
-                mainContent
-            } else {
-                PermissionsSetupView()
-            }
-        }
-        .animation(.easeInOut(duration: 0.2), value: appState.hasRequiredPermissions)
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            appState.refreshPermissions()
-        }
+        mainContent
         .onAppear {
-            appState.refreshPermissions()
             monitor.start()
         }
         .onDisappear { monitor.stop() }
@@ -46,6 +35,7 @@ struct MainWindowView: View {
                 case .history:        HistoryView()
                 case .profiles:       ProfilesListView()
                 case .dictionary:     DictionaryView()
+                case .snippets:       SnippetsView()
                 case .knowledgeBase:  KnowledgeBaseView()
                 }
             }
@@ -69,6 +59,7 @@ enum SidebarItem: String, CaseIterable, Identifiable, Hashable {
     case history       = "History"
     case profiles      = "Profiles"
     case dictionary    = "Dictionary"
+    case snippets      = "Snippets"
     case knowledgeBase = "Personal Context"
 
     var id: String { rawValue }
@@ -79,6 +70,7 @@ enum SidebarItem: String, CaseIterable, Identifiable, Hashable {
         case .history:       return "clock"
         case .profiles:      return "slider.horizontal.3"
         case .dictionary:    return "text.book.closed"
+        case .snippets:      return "text.badge.plus"
         case .knowledgeBase: return "person.text.rectangle"
         }
     }

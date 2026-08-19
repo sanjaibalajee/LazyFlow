@@ -41,7 +41,9 @@ actor LocalSTTService {
         guard let backend else { throw LocalSTTError.notLoaded }
         switch backend {
         case .parakeet(let manager):
-            let result = try await manager.transcribe(audioURL)
+            // FluidAudio 0.15+ transcription is decoder-state driven; one-shot files use a fresh state.
+            var decoderState = try TdtDecoderState()
+            let result = try await manager.transcribe(audioURL, decoderState: &decoderState)
             return result.text.trimmingCharacters(in: .whitespacesAndNewlines)
         case .whisper(let kit):
             let results = try await kit.transcribe(audioPath: audioURL.path)
@@ -94,8 +96,7 @@ actor LocalSTTService {
             onProgress(frac, "Downloading… \(Int(frac / 0.85 * 100))%")
         }
         onProgress(0.90, "Initializing…")
-        let manager = AsrManager(config: .default)
-        try await manager.initialize(models: models)
+        let manager = AsrManager(config: .default, models: models)
         backend = .parakeet(manager)
         onProgress(1.0, "Ready")
     }

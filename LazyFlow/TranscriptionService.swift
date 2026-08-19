@@ -18,11 +18,18 @@ struct TranscriptionService {
     private let baseURL: String
     private let apiKey: String
     private let model: String
+    private let language: String?
 
-    init(apiKey: String, baseURL: String = "https://api.groq.com/openai/v1", model: String = "whisper-large-v3") {
+    init(
+        apiKey: String,
+        baseURL: String = "https://api.groq.com/openai/v1",
+        model: String = "whisper-large-v3",
+        language: String? = nil
+    ) {
         self.apiKey = apiKey
         self.baseURL = baseURL
         self.model = model
+        self.language = language
     }
 
     // vocabularyHint: comma-separated terms passed as Whisper's `prompt` field to bias
@@ -78,6 +85,14 @@ struct TranscriptionService {
         append("--\(boundary)\(crlf)")
         append("Content-Disposition: form-data; name=\"response_format\"\(crlf)\(crlf)")
         append("json\(crlf)")
+
+        // A known ISO-639-1 language narrows Whisper's search space and improves both latency
+        // and accuracy. Automatic mode omits the field entirely.
+        if let language, !language.isEmpty {
+            append("--\(boundary)\(crlf)")
+            append("Content-Disposition: form-data; name=\"language\"\(crlf)\(crlf)")
+            append("\(language)\(crlf)")
+        }
 
         // prompt field — biases Whisper toward correct spellings of names and terms
         if !vocabularyHint.isEmpty {

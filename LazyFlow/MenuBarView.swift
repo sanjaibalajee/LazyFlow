@@ -7,10 +7,9 @@ struct MenuBarView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if !appState.hasRequiredPermissions {
+            if !appState.permissions.coreReady {
                 Button {
-                    openWindow(id: "main")
-                    NSApp.activate(ignoringOtherApps: true)
+                    NotificationCenter.default.post(name: .lazyflowOpenSetup, object: nil)
                 } label: {
                     Label("Setup permissions", systemImage: "exclamationmark.shield")
                         .font(.system(size: 12, weight: .medium))
@@ -42,6 +41,7 @@ struct MenuBarView: View {
         }
         .frame(width: 284)
         .padding(.vertical, 4)
+        .onAppear { appState.permissions.refresh() }
     }
 
     // MARK: - Footer
@@ -55,6 +55,9 @@ struct MenuBarView: View {
             MenuBarActionRow(label: "Settings", icon: "gear") {
                 openSettings()
                 NSApp.activate(ignoringOtherApps: true)
+            }
+            MenuBarActionRow(label: "Check for Updates…", icon: "arrow.down.circle") {
+                NotificationCenter.default.post(name: .lazyflowCheckForUpdates, object: nil)
             }
             MenuBarActionRow(label: "Quit LazyFlow", icon: "power", isDestructive: true) {
                 NSApp.terminate(nil)

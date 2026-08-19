@@ -37,8 +37,7 @@ struct ProfilesListView: View {
                 isPresented: $showAddSheet,
                 existingIDs: Set(store.profiles.keys)
             ) { bundleID, name in
-                let p = AppProfile(bundleIdentifier: bundleID, displayName: name,
-                                   tone: AppProfile.defaultTone(for: bundleID))
+                let p = AppProfile.smartDefault(bundleIdentifier: bundleID, displayName: name)
                 store.upsert(p)
             }
         }
@@ -147,7 +146,7 @@ struct ProfileSidebarRow: View {
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 8) {
-                AppIconView(bundleIdentifier: profile.bundleIdentifier)
+                AppIcon(bundleIdentifier: profile.bundleIdentifier, cornerRadius: 5)
                     .frame(width: 26, height: 26)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(profile.displayName)
@@ -165,35 +164,6 @@ struct ProfileSidebarRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-    }
-}
-
-// MARK: - App Icon
-// Cached like AppBundleIcon — NSWorkspace filesystem lookups must not run on every render.
-
-struct AppIconView: View {
-    let bundleIdentifier: String
-    @State private var cachedIcon: NSImage?
-
-    var body: some View {
-        Image(nsImage: cachedIcon ?? placeholder)
-            .resizable()
-            .aspectRatio(contentMode: .fit)
-            .clipShape(RoundedRectangle(cornerRadius: 5))
-            .task(id: bundleIdentifier) { cachedIcon = resolveIcon() }
-    }
-
-    private func resolveIcon() -> NSImage {
-        if let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier).first,
-           let icon = running.icon { return icon }
-        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier) {
-            return NSWorkspace.shared.icon(forFile: url.path)
-        }
-        return placeholder
-    }
-
-    private var placeholder: NSImage {
-        NSImage(systemSymbolName: "app.dashed", accessibilityDescription: nil) ?? NSImage()
     }
 }
 
@@ -239,7 +209,7 @@ struct ProfileDetailView: View {
 
     private var header: some View {
         HStack(spacing: 14) {
-            AppIconView(bundleIdentifier: profile.bundleIdentifier)
+            AppIcon(bundleIdentifier: profile.bundleIdentifier, cornerRadius: 5)
                 .frame(width: 48, height: 48)
             VStack(alignment: .leading, spacing: 3) {
                 Text(profile.displayName).font(.title2.bold())
@@ -318,6 +288,8 @@ struct ProfileDetailView: View {
                 Divider().padding(.leading, 12)
                 FormattingToggleRow("Keep filler words",     "Preserve um, uh, like, you know",   isOn: $profile.formattingOptions.keepFillerWords)
                     .disabled(profile.tone == .formal || profile.tone == .code || profile.tone == .technical)
+                Divider().padding(.leading, 12)
+                FormattingToggleRow("No trailing period",    "More natural short messages",       isOn: $profile.formattingOptions.omitTrailingPeriod)
             }
         }
     }
