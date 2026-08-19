@@ -43,10 +43,11 @@ final class HotkeyManager {
     private var globalKeyMonitor:   Any?
     private var localKeyMonitor:    Any?
 
+    var isRunning: Bool { globalFlagsMonitor != nil && localFlagsMonitor != nil }
+
     func start() throws {
+        guard !isRunning else { return }
         guard AXIsProcessTrusted() else {
-            let opts: NSDictionary = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
-            AXIsProcessTrustedWithOptions(opts)
             throw HotkeyError.accessibilityDenied
         }
 
@@ -94,10 +95,15 @@ final class HotkeyManager {
     // device-independent .option flag would miss a right-Option release while
     // left-Option remains held.
     private static let NX_DEVICERALTKEYMASK: UInt = 0x0000_0040
+    private static let NX_DEVICELALTKEYMASK: UInt = 0x0000_0020
 
     private func handleFlags(_ event: NSEvent) {
         guard event.keyCode == Self.triggerKeyCode else { return }
-        let isDown = (event.modifierFlags.rawValue & Self.NX_DEVICERALTKEYMASK) != 0
+        let rawFlags = event.modifierFlags.rawValue
+        let hasDeviceFlags = (rawFlags & (Self.NX_DEVICELALTKEYMASK | Self.NX_DEVICERALTKEYMASK)) != 0
+        let isDown = hasDeviceFlags
+            ? (rawFlags & Self.NX_DEVICERALTKEYMASK) != 0
+            : event.modifierFlags.contains(.option)
         DispatchQueue.main.async { [weak self] in self?.transition(isDown: isDown) }
     }
 

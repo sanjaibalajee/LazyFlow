@@ -16,16 +16,39 @@ final class CorrectionStore {
 
     // MARK: - Core Query
 
-    /// Returns corrections relevant to `transcript`, filtered by PhoneticMatcher,
-    /// sorted by frequency descending, capped at 10.
-    /// Includes per-app corrections for `bundleID` plus all global (nil) corrections.
+    /// Returns exact phrase matches for this transcript. Longer phrases win before
+    /// shorter overlapping entries; global and app-specific entries are both eligible.
     func relevantCorrections(for transcript: String, bundleID: String?) -> [CorrectionEntry] {
-        let candidates = fetch(bundleID: bundleID)
-        return candidates
-            .filter { PhoneticMatcher.isRelevant(heard: $0.heard, to: transcript) }
-            .sorted { $0.frequency > $1.frequency }
-            .prefix(10)
-            .map { $0 }
+        Self.selectRelevantCorrections(
+            from: fetch(bundleID: bundleID),
+            transcript: transcript,
+            bundleID: bundleID
+        )
+    }
+
+    /// Pure selection logic kept separate from persistence so precedence stays testable.
+    /// For the same phrase, the current app's correction always replaces the global one.
+    nonisolated static func selectRelevantCorrections(
+        from candidates: [CorrectionEntry],
+        transcript: String,
+        bundleID: String?
+    ) -> [CorrectionEntry] {
+        let sorted = candidates
+            .filter { containsExactPhrase($0.heard, in: transcript) }
+            .sorted {
+                if $0.heard.count != $1.heard.count { return $0.heard.count > $1.heard.count }
+
+                let lhsIsAppSpecific = bundleID != nil && $0.bundleIdentifier == bundleID
+                let rhsIsAppSpecific = bundleID != nil && $1.bundleIdentifier == bundleID
+                if lhsIsAppSpecific != rhsIsAppSpecific { return lhsIsAppSpecific }
+                if $0.frequency != $1.frequency { return $0.frequency > $1.frequency }
+                return $0.id < $1.id
+            }
+
+        var seenPhrases = Set<String>()
+        return sorted.filter {
+            seenPhrases.insert(CorrectionEntry.normalizedPhrase($0.heard).lowercased()).inserted
+        }
     }
 
     // MARK: - CRUD
@@ -37,7 +60,7 @@ final class CorrectionStore {
         do {
             try db.write { db in
                 let existing = try CorrectionEntry
-                    .filter(Column("heard") == entry.heard)
+                    .filter(Column("heard").collating(.nocase) == entry.heard)
                     .filter(entry.bundleIdentifier == nil
                         ? Column("bundleIdentifier") == nil
                         : Column("bundleIdentifier") == entry.bundleIdentifier)
@@ -57,6 +80,22 @@ final class CorrectionStore {
             reload()
         } catch {
             print("[LazyFlow] CorrectionStore.add failed: \(error)")
+        }
+    }
+
+    func update(_ entry: CorrectionEntry) {
+        var normalized = entry
+        normalized.heard = CorrectionEntry.normalizedPhrase(entry.heard)
+        normalized.correct = CorrectionEntry.normalizedPhrase(entry.correct)
+        guard !normalized.heard.isEmpty, !normalized.correct.isEmpty else { return }
+
+        do {
+            try db.write { db in
+                try normalized.update(db)
+            }
+            reload()
+        } catch {
+            print("[LazyFlow] CorrectionStore.update failed: \(error)")
         }
     }
 
@@ -83,6 +122,7 @@ final class CorrectionStore {
                     )
                 }
             }
+            reload()
         } catch {
             print("[LazyFlow] CorrectionStore.incrementFrequency failed: \(error)")
         }
@@ -129,5 +169,18 @@ final class CorrectionStore {
                 .order(Column("frequency").desc)
                 .fetchAll(db)
         }) ?? []
+    }
+
+    func globalCorrections() -> [CorrectionEntry] {
+        fetch(bundleID: nil)
+    }
+
+    nonisolated private static func containsExactPhrase(_ phrase: String, in transcript: String) -> Bool {
+        guard !phrase.isEmpty else { return false }
+        let escaped = NSRegularExpression.escapedPattern(for: phrase)
+        let pattern = "(?i)(?<![\\p{L}\\p{N}_])\(escaped)(?![\\p{L}\\p{N}_])"
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return false }
+        let range = NSRange(transcript.startIndex..., in: transcript)
+        return regex.firstMatch(in: transcript, range: range) != nil
     }
 }

@@ -48,13 +48,9 @@ final class AppState {
 
     // MARK: - Groq API key (STT always uses Groq Whisper — kept for backward compat)
 
-    var apiKey: String = Keychain.load(forKey: "groq_api_key") ?? "" {
-        didSet {
-            apiKey.isEmpty
-                ? Keychain.delete(forKey: "groq_api_key")
-                : Keychain.save(apiKey, forKey: "groq_api_key")
-            providerStore.migrateGroqKey(apiKey)
-        }
+    var apiKey: String {
+        get { providerStore.apiKey(for: .groq) }
+        set { providerStore.setApiKey(newValue, for: .groq) }
     }
 
     /// Groq key used for cloud Whisper. Prefers the per-provider Keychain entry that Settings
@@ -62,8 +58,7 @@ final class AppState {
     /// Reading only the legacy entry meant a key added in Settings → Providers never reached
     /// transcription, which failed as "no API key" while the UI showed a key was configured.
     var groqAPIKey: String {
-        let stored = providerStore.apiKey(for: .groq)
-        return stored.isEmpty ? apiKey : stored
+        providerStore.apiKey(for: .groq)
     }
 
     // Cloud STT model (Groq Whisper only)
@@ -191,6 +186,7 @@ final class AppState {
 
     let profileStore = AppProfileStore()
     let snippetStore = SnippetStore()
+    let permissions = PermissionsService()
 
     // MARK: - Knowledge Base
 
@@ -385,7 +381,12 @@ final class AppState {
                         // All corrections are applied as exact Swift substitutions before the
                         // LLM sees the text. LLM-based substitution is unreliable for proper
                         // names — the model capitalises, rephrases, or skips them unpredictably.
-                        let preApplied = applyCorrections(defiltered, corrections: corrections)
+                        let application = CorrectionEngine.apply(defiltered, corrections: corrections)
+                        let preApplied = application.text
+                        final = preApplied
+                        if !application.appliedIDs.isEmpty {
+                            correctionStore.incrementFrequency(for: Array(application.appliedIDs))
+                        }
                         let cleanupStartedAt = Date()
                         // Route LLM: cloud (Groq) or on-device (MLX)
                         switch capturedLLMBackend {
@@ -414,11 +415,8 @@ final class AppState {
                             allowTitleCase: customAllowsTitleCase || capturedFocus?.allowsTitleCase == true,
                             protectedTerms: p.vocabulary + corrections.map(\.correct)
                         )
-                        if !corrections.isEmpty {
-                            correctionStore.incrementFrequency(for: corrections.map(\.id))
-                        }
                     } catch {
-                        print("[LazyFlow] ⚠️ Cleanup failed, pasting filtered transcript: \(error.localizedDescription)")
+                        print("[LazyFlow] ⚠️ Cleanup failed, pasting corrected transcript: \(error.localizedDescription)")
                         errorMessage = "Cleanup unavailable — transcript pasted."
                     }
                 }
@@ -477,19 +475,15 @@ final class AppState {
         Task {
             do {
                 try await localSTT.load(model) { progress, status in
-                    Task { @MainActor [weak self] in
-                        self?.localSTTOpState = progress < 1.0
+                    Task { @MainActor in
+                        self.localSTTOpState = progress < 1.0
                             ? .busy(progress: progress, status: status)
                             : .idle
                     }
                 }
-                Task { @MainActor [weak self] in
-                    self?.localSTTOpState = .idle
-                }
+                localSTTOpState = .idle
             } catch {
-                Task { @MainActor [weak self] in
-                    self?.localSTTOpState = .error(error.localizedDescription)
-                }
+                localSTTOpState = .error(error.localizedDescription)
             }
         }
     }
@@ -508,21 +502,17 @@ final class AppState {
         llmLoadTask = Task {
             do {
                 try await localLLM.load(model) { progress, status in
-                    Task { @MainActor [weak self] in
-                        self?.localLLMOpState = progress < 1.0
+                    Task { @MainActor in
+                        self.localLLMOpState = progress < 1.0
                             ? .busy(progress: progress, status: status)
                             : .idle
                     }
                 }
                 guard !Task.isCancelled else { return }
-                Task { @MainActor [weak self] in
-                    self?.localLLMOpState = .idle
-                }
+                localLLMOpState = .idle
             } catch {
                 guard !Task.isCancelled else { return }
-                Task { @MainActor [weak self] in
-                    self?.localLLMOpState = .error(error.localizedDescription)
-                }
+                localLLMOpState = .error(error.localizedDescription)
             }
         }
     }
@@ -560,8 +550,8 @@ final class AppState {
         localSTTOpState = .busy(progress: 0, status: "Starting…")
         do {
             try await localSTT.load(model) { p, s in
-                Task { @MainActor [weak self] in
-                    self?.localSTTOpState = p < 1 ? .busy(progress: p, status: s) : .idle
+                Task { @MainActor in
+                    self.localSTTOpState = p < 1 ? .busy(progress: p, status: s) : .idle
                 }
             }
             localSTTOpState = .idle
@@ -585,30 +575,6 @@ final class AppState {
         )
     }
 
-    // MARK: - Helpers
-
-    // Applies correction pairs as exact Swift substitutions (case-insensitive, word-boundary-aware).
-    // Normalises the heard key at match time so entries stored with punctuation ("rishin,") work
-    // identically to clean ones ("rishin") — surrounding punctuation in the text is preserved.
-    private func applyCorrections(_ text: String, corrections: [CorrectionEntry]) -> String {
-        let punct = CharacterSet(charactersIn: ".,;:!?\"'")
-        var result = text
-        for correction in corrections.sorted(by: { $0.frequency > $1.frequency }) {
-            let heard = correction.heard
-                .trimmingCharacters(in: .whitespaces)
-                .trimmingCharacters(in: punct)
-            guard !heard.isEmpty else { continue }
-            let escaped = NSRegularExpression.escapedPattern(for: heard)
-            guard let regex = try? NSRegularExpression(pattern: "(?i)\\b\(escaped)\\b") else { continue }
-            let full = NSRange(result.startIndex..., in: result)
-            result = regex.stringByReplacingMatches(
-                in: result, range: full,
-                withTemplate: NSRegularExpression.escapedTemplate(for: correction.correct)
-            )
-        }
-        return result
-    }
-
     private func finishProcessing(transcript: String, appName: String?, bundleIdentifier: String?) {
         currentTranscript = transcript
         recordingMode     = .idle
@@ -628,11 +594,12 @@ final class AppState {
 private enum FillerWordFilter {
     // Matches common vocal fillers (uh, um, er, hmm, etc.) plus optional trailing comma/period.
     // Word boundaries prevent clipping real words ("umbrella", "uh-oh", etc.).
-    private static let pattern = try! NSRegularExpression(
+    private static let pattern = try? NSRegularExpression(
         pattern: #"(?i)\b(u+h+|u+m+|e+r+|h?mm+|mhm)\b[,.]?\s*|uh-huh[,.]?\s*"#
     )
 
     static func filter(_ text: String) -> String {
+        guard let pattern else { return text }
         var result = pattern.stringByReplacingMatches(
             in: text,
             range: NSRange(text.startIndex..., in: text),

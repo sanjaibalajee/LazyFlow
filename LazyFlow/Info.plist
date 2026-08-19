@@ -30,22 +30,17 @@
 	<string>Copyright © 2026 fanpit. All rights reserved.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>LazyFlow needs microphone access to transcribe your speech.</string>
+	<key>NSAccessibilityUsageDescription</key>
+	<string>LazyFlow uses Accessibility to detect the Right Option shortcut and insert transcribed text.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>LazyFlow uses on-device speech recognition to show a live preview while you dictate.</string>
-	<!--
-	  Sparkle auto-update configuration. To enable updates:
-	    1. Generate an EdDSA key pair with Sparkle's `generate_keys` and paste the
-	       public key into SUPublicEDKey below.
-	    2. Host an appcast.xml (see Sparkle's `generate_appcast`) and set SUFeedURL.
-	    3. Flip SUEnableAutomaticChecks to <true/>.
-	  Until SUFeedURL is set, the updater stays dormant and "Check for Updates…"
-	  reports that it can't check.
-	-->
 	<key>SUFeedURL</key>
-	<string></string>
+	<string>https://github.com/sanjaibalajee/LazyFlow/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>
-	<string></string>
+	<string>fhOr4ChSyTPNNwy+V2BXGVkC5gjxa9KEQl84q4EhAAc=</string>
 	<key>SUEnableAutomaticChecks</key>
-	<false/>
+	<true/>
+	<key>SUAutomaticallyUpdate</key>
+	<true/>
 </dict>
 </plist>

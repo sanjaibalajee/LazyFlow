@@ -43,7 +43,7 @@ final class AppProfileStore {
         save()
     }
 
-    // MARK: - Persistencevir
+    // MARK: - Persistence
 
     private func save() {
         do {

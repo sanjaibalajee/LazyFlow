@@ -46,6 +46,10 @@ private struct GeneralSettingsTab: View {
         SettingsTab {
             SectionHeader(icon: "slider.horizontal.3", title: "General")
 
+            PermissionsSettingsSection()
+
+            Divider()
+
             VStack(alignment: .leading, spacing: 6) {
                 Text("Text insertion").font(.subheadline.weight(.medium))
                 Picker("", selection: $appState.insertionMode) {
