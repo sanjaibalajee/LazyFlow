@@ -56,8 +56,14 @@ struct LLMClient {
         var body: [String: Any] = [
             "model": config.model,
             "messages": messages,
-            "temperature": temperature,
         ]
+        if config.provider == .openai, config.model.hasPrefix("gpt-5.") {
+            // GPT-5 reasoning models use an explicit low-latency reasoning setting for
+            // deterministic transcript cleanup. Sampling parameters are intentionally omitted.
+            body["reasoning_effort"] = "none"
+        } else {
+            body["temperature"] = temperature
+        }
         if let maxTokens { body["max_tokens"] = maxTokens }
         if config.provider == .groq, config.model.hasPrefix("openai/gpt-oss-") {
             // Cleanup is deterministic rewriting, not a reasoning task. Keeping reasoning low

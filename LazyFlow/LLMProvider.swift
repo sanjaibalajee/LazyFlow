@@ -51,11 +51,13 @@ enum LLMProvider: String, CaseIterable, Codable, Identifiable, Hashable {
             ]
         case .openai:
             [
+                LLMModel(id: "gpt-5.6-luna", name: "GPT-5.6 Luna", badge: "Recommended"),
+                LLMModel(id: "gpt-5.4-mini", name: "GPT-5.4 mini", badge: "Balanced"),
+                LLMModel(id: "gpt-5.4-nano", name: "GPT-5.4 nano", badge: "Cheapest"),
                 LLMModel(id: "gpt-4.1", name: "GPT-4.1", badge: "Best"),
                 LLMModel(id: "gpt-4.1-mini", name: "GPT-4.1 mini", badge: "Fast"),
                 LLMModel(id: "gpt-4o", name: "GPT-4o", badge: "Stable"),
                 LLMModel(id: "gpt-4o-mini", name: "GPT-4o mini", badge: "Cheap"),
-                LLMModel(id: "o4-mini", name: "o4 mini", badge: "Reasoning"),
                 LLMModel(id: "o3", name: "o3", badge: "Powerful"),
             ]
         case .google:
@@ -79,7 +81,7 @@ enum LLMProvider: String, CaseIterable, Codable, Identifiable, Hashable {
     nonisolated var defaultModel: String {
         switch self {
         case .groq:      "openai/gpt-oss-20b"
-        case .openai:    "gpt-4.1-mini"
+        case .openai:    "gpt-5.6-luna"
         case .google:    "gemini-2.5-flash"
         case .anthropic: "claude-haiku-4-5"
         case .custom:    ""

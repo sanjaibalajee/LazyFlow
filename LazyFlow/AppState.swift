@@ -46,11 +46,11 @@ final class AppState {
 
     let providerStore = LLMProviderStore.shared
 
-    // MARK: - Groq API key (STT always uses Groq Whisper — kept for backward compat)
+    // MARK: - Legacy Groq API key bridge
 
     var apiKey: String {
-        get { providerStore.apiKey(for: .groq) }
-        set { providerStore.setApiKey(newValue, for: .groq) }
+        get { providerStore.apiKey(for: LLMProvider.groq) }
+        set { providerStore.setApiKey(newValue, for: LLMProvider.groq) }
     }
 
     /// Groq key used for cloud Whisper. Prefers the per-provider Keychain entry that Settings
@@ -58,12 +58,17 @@ final class AppState {
     /// Reading only the legacy entry meant a key added in Settings → Providers never reached
     /// transcription, which failed as "no API key" while the UI showed a key was configured.
     var groqAPIKey: String {
-        providerStore.apiKey(for: .groq)
+        providerStore.apiKey(for: LLMProvider.groq)
     }
 
-    // Cloud STT model (Groq Whisper only)
-    var sttModel: String = UserDefaults.standard.string(forKey: "lazyflow_stt_model") ?? "whisper-large-v3" {
-        didSet { UserDefaults.standard.set(sttModel, forKey: "lazyflow_stt_model") }
+    var sttProvider: TranscriptionProvider {
+        get { providerStore.transcriptionProvider }
+        set { providerStore.transcriptionProvider = newValue }
+    }
+
+    var sttModel: String {
+        get { providerStore.transcriptionModel }
+        set { providerStore.transcriptionModel = newValue }
     }
 
     var dictationLanguage: DictationLanguage = {
@@ -270,9 +275,7 @@ final class AppState {
         let audioURL      = audioCapture.outputURL
         let groqKey       = groqAPIKey
         let cloudSTT      = TranscriptionService(
-            apiKey: groqKey,
-            model: sttModel,
-            language: dictationLanguage.apiCode
+            config: providerStore.transcriptionConfig(language: dictationLanguage.apiCode)
         )
         let dictCfg       = providerStore.dictationConfig
         // Fall back to the legacy single Groq key when the provider store has no key yet.
@@ -300,14 +303,10 @@ final class AppState {
 
         let duration = audioCapture.recordingDuration
 
-        // Build the Whisper prompt hint.
-        //
-        // Whisper treats the `prompt` field as preceding context — it continues the text,
-        // so a natural sentence activates vocabulary biasing much more effectively than a
-        // raw comma-separated list. Cap corrections at 20 by frequency so the prompt stays
-        // focused; vocabulary words (manually added) always get included in full.
-        let sttHint: String = {
-            guard let p = profile else { return "" }
+        // Build a focused vocabulary list for cloud and local transcription models.
+        // Manual vocabulary is always included, followed by the most frequent corrections.
+        let sttTerms: [String] = {
+            guard let p = profile else { return [] }
 
             // Vocabulary words first (always included), then top-frequency correct spellings
             var terms: [String] = p.vocabulary
@@ -320,18 +319,16 @@ final class AppState {
 
             // Deduplicate (case-insensitive)
             var seen = Set<String>()
-            let unique = terms.filter { seen.insert($0.lowercased()).inserted }
-            guard !unique.isEmpty else { return "" }
-
-            // Shape into a natural sentence so Whisper treats these as in-context words
-            // rather than an unrelated vocabulary dump.
-            let listed = unique.joined(separator: ", ")
-            return "The following terms may appear in this transcript: \(listed)."
+            return terms.filter { seen.insert($0.lowercased()).inserted }
         }()
+
+        let sttHint = sttTerms.isEmpty
+            ? ""
+            : "The following terms may appear in this transcript: \(sttTerms.joined(separator: ", "))."
 
 #if DEBUG
         if !sttHint.isEmpty {
-            print("[LazyFlow] 🎙 Whisper prompt: \(sttHint)")
+            print("[LazyFlow] 🎙 STT vocabulary: \(sttHint)")
         }
 #endif
 
@@ -349,12 +346,12 @@ final class AppState {
             }
 
             do {
-                // Route STT: cloud (Groq) or on-device
+                // Route STT: configured cloud provider or on-device
                 let sttStartedAt = Date()
                 let raw: String
                 switch capturedSTTBackend {
                 case .cloud:
-                    raw = try await cloudSTT.transcribe(audioURL: url, vocabularyHint: sttHint)
+                    raw = try await cloudSTT.transcribe(audioURL: url, vocabularyTerms: sttTerms)
                 case .local:
                     if localSTTOpState.isBusy {
                         recordingMode = .idle
@@ -388,7 +385,7 @@ final class AppState {
                             correctionStore.incrementFrequency(for: Array(application.appliedIDs))
                         }
                         let cleanupStartedAt = Date()
-                        // Route LLM: cloud (Groq) or on-device (MLX)
+                        // Route LLM: configured cloud provider or on-device (MLX)
                         switch capturedLLMBackend {
                         case .cloud:
                             final = try await cloudLLM.process(

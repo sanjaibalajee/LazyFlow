@@ -686,7 +686,7 @@ struct OnboardingView: View {
         let trimmed = groqKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         appState.apiKey = trimmed
-        appState.providerStore.setApiKey(trimmed, for: .groq)
+        appState.providerStore.setApiKey(trimmed, for: LLMProvider.groq)
     }
 
     private func generateProfiles() async {

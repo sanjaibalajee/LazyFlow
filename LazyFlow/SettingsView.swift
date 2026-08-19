@@ -128,7 +128,6 @@ private struct ProvidersSettingsTab: View {
     private static let keyedProviders = LLMProvider.allCases.filter { $0 != .custom }
 
     var body: some View {
-        @Bindable var store = appState.providerStore
         SettingsTab {
             SectionHeader(icon: "wand.and.stars", title: "AI Providers")
             Text("Keys are stored in the system Keychain and never leave your Mac except to call the provider you pick.")
@@ -138,55 +137,16 @@ private struct ProvidersSettingsTab: View {
             VStack(spacing: 0) {
                 ForEach(Self.keyedProviders) { provider in
                     ProviderKeyRow(provider: provider, store: appState.providerStore)
-                    if provider != Self.keyedProviders.last { Divider().padding(.leading, 34) }
+                    Divider().padding(.leading, 34)
                 }
+                ProviderKeyRow(transcriptionProvider: .elevenLabs, store: appState.providerStore)
             }
             .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
 
             Divider()
 
             // Provider and model used to clean up completed transcripts.
-            VStack(alignment: .leading, spacing: 8) {
-                Label("Dictation Cleanup", systemImage: "waveform.badge.mic")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.secondary)
-
-                HStack(spacing: 8) {
-                    Picker("", selection: $store.dictationProvider) {
-                        ForEach(Self.keyedProviders) { provider in
-                            Text(provider.displayName).tag(provider)
-                        }
-                    }
-                    .labelsHidden()
-                    .frame(width: 150)
-                    .onChange(of: store.dictationProvider) { _, provider in
-                        store.dictationModel = provider.defaultModel
-                    }
-
-                    Picker("", selection: $store.dictationModel) {
-                        ForEach(store.dictationProvider.presetModels) { m in
-                            HStack {
-                                Text(m.name)
-                                if let b = m.badge {
-                                    Text("· \(b)").foregroundStyle(.secondary).font(.caption)
-                                }
-                            }.tag(m.id)
-                        }
-                    }
-                    .labelsHidden()
-                    .frame(maxWidth: .infinity)
-                }
-
-                if !store.hasKey(for: store.dictationProvider) {
-                    Label(
-                        "No \(store.dictationProvider.displayName) key yet — cleanup will fall back to your Groq key, or be skipped.",
-                        systemImage: "exclamationmark.triangle.fill"
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-                    .fixedSize(horizontal: false, vertical: true)
-                }
-            }
+            DictationCleanupPicker(store: appState.providerStore, providers: Self.keyedProviders)
         }
     }
 }
@@ -198,6 +158,7 @@ private struct SpeechSettingsTab: View {
 
     var body: some View {
         @Bindable var appState = appState
+        @Bindable var store = appState.providerStore
         SettingsTab {
             SectionHeader(icon: "waveform", title: "Transcription")
 
@@ -220,26 +181,43 @@ private struct SpeechSettingsTab: View {
             Divider()
 
             Picker("", selection: $appState.sttBackend) {
-                Text("Cloud (Groq)").tag(STTBackend.cloud)
+                Text("Cloud").tag(STTBackend.cloud)
                 Text("On-device").tag(STTBackend.local)
             }
             .pickerStyle(.segmented).labelsHidden()
 
             if appState.sttBackend == .cloud {
-                if !appState.providerStore.hasKey(for: .groq) && appState.apiKey.isEmpty {
-                    Label("Cloud transcription needs a Groq key — add one in the Providers tab.",
-                          systemImage: "exclamationmark.triangle.fill")
+                VStack(alignment: .leading, spacing: 10) {
+                    Picker("Provider", selection: $store.transcriptionProvider) {
+                        ForEach(TranscriptionProvider.allCases) { provider in
+                            Label(provider.displayName, systemImage: provider.icon).tag(provider)
+                        }
+                    }
+                    .onChange(of: store.transcriptionProvider) { _, provider in
+                        store.transcriptionModel = provider.defaultModel
+                    }
+
+                    HStack(spacing: 10) {
+                        ForEach(store.transcriptionProvider.models) { model in
+                            CloudModelCard(
+                                name: model.name,
+                                badge: model.badge,
+                                badgeColor: Self.badgeColor(model.badge),
+                                modelID: model.id,
+                                detail: model.detail,
+                                isSelected: store.transcriptionModel == model.id
+                            ) { store.transcriptionModel = model.id }
+                        }
+                    }
+
+                    if !store.hasKey(for: store.transcriptionProvider) {
+                        Label(
+                            "Cloud transcription needs a \(store.transcriptionProvider.displayName) key — add one in the Providers tab.",
+                            systemImage: "exclamationmark.triangle.fill"
+                        )
                         .font(.caption)
                         .foregroundStyle(.orange)
                         .fixedSize(horizontal: false, vertical: true)
-                }
-                HStack(spacing: 10) {
-                    ForEach(Self.cloudSTTModels) { m in
-                        CloudModelCard(
-                            name: m.name, badge: m.badge, badgeColor: m.badgeColor,
-                            modelID: m.id, detail: m.detail,
-                            isSelected: appState.sttModel == m.id
-                        ) { appState.sttModel = m.id }
                     }
                 }
             } else {
@@ -255,15 +233,13 @@ private struct SpeechSettingsTab: View {
         }
     }
 
-    struct CloudSTTModel: Identifiable {
-        let id: String; let name: String; let badge: String; let badgeColor: Color; let detail: String
+    private static func badgeColor(_ badge: String) -> Color {
+        switch badge {
+        case "Fast":         .green
+        case "Multilingual": .purple
+        default:             .blue
+        }
     }
-    static let cloudSTTModels: [CloudSTTModel] = [
-        .init(id: "whisper-large-v3",       name: "Large v3",    badge: "Accurate", badgeColor: .blue,
-              detail: "Highest accuracy across all languages. Best for technical content. ~2–4s slower."),
-        .init(id: "whisper-large-v3-turbo", name: "Large Turbo", badge: "Fast",     badgeColor: .green,
-              detail: "6× faster with very good accuracy. Ideal for everyday use."),
-    ]
 }
 
 // MARK: - Cleanup (post-processing)
@@ -327,25 +303,50 @@ private struct CleanupSettingsTab: View {
 // MARK: - Provider key row (locked by default, unlock to edit)
 
 private struct ProviderKeyRow: View {
-    let provider:    LLMProvider
+    let provider: LLMProvider?
+    let transcriptionProvider: TranscriptionProvider?
     @Bindable var store: LLMProviderStore
 
     @State private var isEditing = false
     @State private var draft     = ""
     @FocusState private var fieldFocused: Bool
 
-    private var hasKey: Bool { store.hasKey(for: provider) }
+    init(provider: LLMProvider, store: LLMProviderStore) {
+        self.provider = provider
+        self.transcriptionProvider = nil
+        self.store = store
+    }
+
+    init(transcriptionProvider: TranscriptionProvider, store: LLMProviderStore) {
+        self.provider = nil
+        self.transcriptionProvider = transcriptionProvider
+        self.store = store
+    }
+
+    private var hasKey: Bool {
+        if let provider { return store.hasKey(for: provider) }
+        if let transcriptionProvider { return store.hasKey(for: transcriptionProvider) }
+        return false
+    }
     private var canSave: Bool { !draft.trimmingCharacters(in: .whitespaces).isEmpty }
+
+    private var displayName: String {
+        provider?.displayName ?? transcriptionProvider?.displayName ?? "Provider"
+    }
+
+    private var icon: String {
+        provider?.icon ?? transcriptionProvider?.icon ?? "key"
+    }
 
     var body: some View {
         HStack(spacing: 10) {
             // Provider identity
-            Image(systemName: provider.icon)
+            Image(systemName: icon)
                 .font(.system(size: 11))
                 .foregroundStyle(hasKey ? Color.accentColor : Color.secondary)
                 .frame(width: 20)
 
-            Text(provider.displayName)
+            Text(displayName)
                 .font(.system(size: 13))
                 .frame(width: 124, alignment: .leading)
 
@@ -405,14 +406,14 @@ private struct ProviderKeyRow: View {
                 // Removing a key used to be impossible — the only way out was overwriting it.
                 if hasKey {
                     Button {
-                        store.clearApiKey(for: provider)
+                        clearKey()
                     } label: {
                         Image(systemName: "trash")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
-                    .help("Remove the \(provider.displayName) key from your Keychain")
+                    .help("Remove the \(displayName) key from your Keychain")
                 }
             }
         }
@@ -421,21 +422,116 @@ private struct ProviderKeyRow: View {
         .animation(.easeInOut(duration: 0.15), value: isEditing)
     }
 
+    private func clearKey() {
+        if let provider { store.clearApiKey(for: provider) }
+        else if let transcriptionProvider { store.clearApiKey(for: transcriptionProvider) }
+    }
+
     private func save() {
         guard canSave else { return }
-        store.setApiKey(draft.trimmingCharacters(in: .whitespaces), for: provider)
+        let trimmed = draft.trimmingCharacters(in: .whitespaces)
+        if let provider { store.setApiKey(trimmed, for: provider) }
+        else if let transcriptionProvider { store.setApiKey(trimmed, for: transcriptionProvider) }
         draft = ""
         isEditing = false
     }
 
     private var keyPlaceholder: String {
-        switch provider {
+        if transcriptionProvider == .elevenLabs { return "sk_…" }
+        guard let provider else { return "API key" }
+        return switch provider {
         case .groq:      "gsk_…"
         case .openai:    "sk-…"
         case .google:    "AIza…"
         case .anthropic: "sk-ant-…"
         default:         "API key"
         }
+    }
+}
+
+// MARK: - Dictation cleanup picker (provider + model)
+
+private struct DictationCleanupPicker: View {
+    @Bindable var store: LLMProviderStore
+    let providers: [LLMProvider]
+
+    @State private var customModel = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Dictation Cleanup", systemImage: "waveform.badge.mic")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 8) {
+                Picker("", selection: $store.dictationProvider) {
+                    ForEach(providers) { provider in
+                        Text(provider.displayName).tag(provider)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 150)
+                .onChange(of: store.dictationProvider) { _, provider in
+                    store.dictationModel = provider.defaultModel
+                    customModel = ""
+                }
+
+                Picker("", selection: $store.dictationModel) {
+                    ForEach(store.dictationProvider.presetModels) { model in
+                        HStack {
+                            Text(model.name)
+                            if let badge = model.badge {
+                                Text("· \(badge)").foregroundStyle(.secondary).font(.caption)
+                            }
+                        }.tag(model.id)
+                    }
+                    // Without a row of its own, a custom model ID leaves the picker blank.
+                    if !isPreset(store.dictationModel) {
+                        HStack {
+                            Text(store.dictationModel)
+                            Text("· Custom").foregroundStyle(.secondary).font(.caption)
+                        }.tag(store.dictationModel)
+                    }
+                }
+                .labelsHidden()
+                .frame(maxWidth: .infinity)
+                .onChange(of: store.dictationModel) { _, model in
+                    if isPreset(model) { customModel = "" }
+                }
+            }
+
+            // Preset lists go stale faster than releases do; this is the escape hatch.
+            HStack(spacing: 8) {
+                TextField("Custom model ID", text: $customModel)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(.body, design: .monospaced))
+                    .onSubmit { applyCustomModel() }
+                Button("Use") { applyCustomModel() }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(customModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+
+            if !store.hasKey(for: store.dictationProvider) {
+                Label(
+                    "No \(store.dictationProvider.displayName) key yet — cleanup will fall back to your Groq key, or be skipped.",
+                    systemImage: "exclamationmark.triangle.fill"
+                )
+                .font(.caption)
+                .foregroundStyle(.orange)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func isPreset(_ model: String) -> Bool {
+        store.dictationProvider.presetModels.contains { $0.id == model }
+    }
+
+    private func applyCustomModel() {
+        let normalized = customModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return }
+        store.dictationModel = normalized
     }
 }
 
