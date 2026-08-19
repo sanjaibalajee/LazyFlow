@@ -99,6 +99,12 @@ struct TranscriptionService {
             appendField(name: "model", value: config.model)
             appendField(name: "response_format", value: "json")
 
+            // A known ISO-639-1 language narrows Whisper's search space and improves both
+            // latency and accuracy. Automatic mode omits the field entirely.
+            if let language = config.language, !language.isEmpty {
+                appendField(name: "language", value: language)
+            }
+
             let prompt = Self.prompt(from: vocabularyTerms)
             if !prompt.isEmpty {
                 appendField(name: "prompt", value: prompt)
@@ -107,6 +113,9 @@ struct TranscriptionService {
             appendField(name: "model_id", value: config.model)
             appendField(name: "tag_audio_events", value: "false")
             appendField(name: "timestamps_granularity", value: "none")
+            if let language = config.language, !language.isEmpty {
+                appendField(name: "language_code", value: language)
+            }
             for term in Self.elevenLabsKeyterms(from: vocabularyTerms) {
                 appendField(name: "keyterms", value: term)
             }

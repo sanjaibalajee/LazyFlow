@@ -6,11 +6,13 @@ import SwiftUI
 /// both the application menu and the menu-bar popover.
 @MainActor
 final class UpdaterService: ObservableObject {
+    static let shared = UpdaterService()
+
     @Published private(set) var canCheckForUpdates = false
 
     private let controller: SPUStandardUpdaterController
 
-    init() {
+    private init() {
         controller = SPUStandardUpdaterController(
             startingUpdater: true,
             updaterDelegate: nil,

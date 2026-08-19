@@ -24,6 +24,14 @@ struct FocusContext {
         return parts.joined(separator: " ")
     }
 
+    /// Long title-cased text is normally a cleanup failure, except when the user is genuinely
+    /// filling a title/headline field.
+    nonisolated var allowsTitleCase: Bool {
+        [label, placeholder]
+            .compactMap { $0?.lowercased() }
+            .contains { $0.contains("title") || $0.contains("headline") }
+    }
+
     nonisolated private var friendlyRole: String? {
         switch role {
         case "AXTextField":       "text input"
@@ -53,8 +61,8 @@ enum FocusContextService {
 
         var focused: CFTypeRef?
         guard AXUIElementCopyAttributeValue(appEl, kAXFocusedUIElementAttribute as CFString, &focused) == .success,
-              let el = focused else { return nil }
-        let element = el as! AXUIElement // swiftlint:disable:this force_cast
+              let el = focused, CFGetTypeID(el) == AXUIElementGetTypeID() else { return nil }
+        let element = el as! AXUIElement
 
         var roleRef: CFTypeRef?
         AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &roleRef)

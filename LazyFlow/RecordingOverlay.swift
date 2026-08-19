@@ -16,7 +16,13 @@ final class RecordingOverlayController {
         if panel != nil { return }
 
         let hosting = NSHostingView(rootView: RecordingOverlayView().environment(appState))
-        hosting.frame = NSRect(x: 0, y: 0, width: 260, height: 76)
+        // Size the panel to the capsule itself. It used to be a hardcoded 260×76 around
+        // 240pt-wide content, which left a band of invisible, draggable dead space.
+        // Fall back to the known content size if the hosting view reports nothing yet.
+        let fitted = hosting.fittingSize
+        hosting.frame = NSRect(origin: .zero,
+                               size: CGSize(width:  fitted.width  > 1 ? fitted.width  : 240,
+                                            height: fitted.height > 1 ? fitted.height : 56))
 
         let p = NSPanel(
             contentRect: hosting.frame,
@@ -68,42 +74,76 @@ final class RecordingOverlayController {
 struct RecordingOverlayView: View {
     @Environment(AppState.self) private var appState
 
-    private var accentColor: Color { appState.isToggleMode ? .orange : .red }
+    private var isProcessing: Bool { appState.recordingMode == .processing }
+    private var accentColor:  Color { appState.isToggleMode ? .orange : .red }
 
     var body: some View {
         HStack(spacing: 12) {
-            WaveformView(level: appState.audioLevel, color: accentColor)
+            // Leading indicator — fixed size in both states so the capsule doesn't resize
+            // when recording hands off to transcription.
+            ZStack {
+                if isProcessing {
+                    ProgressView().controlSize(.small).scaleEffect(0.8)
+                } else {
+                    WaveformView(level: appState.audioLevel, color: accentColor)
+                }
+            }
+            .frame(width: 27, height: 24)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(appState.isToggleMode ? "Tap ⌥ to stop" : "Listening…")
+                Text(title)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.primary)
 
-                // Always reserve the second line so capsule height stays stable
-                Text(appState.targetAppName.map { "→ \($0)" } ?? " ")
+                Text(subtitle)
                     .font(.system(size: 11))
-                    .foregroundStyle(appState.targetAppName != nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(.clear))
+                    .foregroundStyle(hasSubtitle ? AnyShapeStyle(.secondary) : AnyShapeStyle(.clear))
                     .lineLimit(1)
-                    .truncationMode(.tail)
+                    // Head truncation keeps the most recent words visible as you speak.
+                    .truncationMode(showsPreview ? .head : .tail)
             }
 
             Spacer(minLength: 0)
 
-            Button {
-                appState.cancelRecording()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 20, height: 20)
-                    .background(Circle().fill(Color.primary.opacity(0.1)))
+            // No cancel during processing — the transcription request is already in flight
+            // and cancelling would only desync the UI from work that still completes.
+            if !isProcessing {
+                Button {
+                    appState.cancelRecording()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 20, height: 20)
+                        .background(Circle().fill(Color.primary.opacity(0.1)))
+                }
+                .buttonStyle(.plain)
+                .help("Cancel recording (Esc)")
             }
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .frame(width: 240)
         .background(.regularMaterial, in: Capsule())
+        .overlay(Capsule().strokeBorder(.separator.opacity(0.6), lineWidth: 0.5))
+        .animation(.easeInOut(duration: 0.2), value: isProcessing)
+    }
+
+    // MARK: - Copy
+
+    private var showsPreview: Bool { !isProcessing && !appState.liveTranscript.isEmpty }
+    private var hasSubtitle:  Bool { showsPreview || appState.targetAppName != nil }
+
+    private var title: String {
+        if isProcessing            { return "Transcribing…" }
+        if appState.isToggleMode   { return "Tap ⌥ to stop" }
+        return "Listening…"
+    }
+
+    private var subtitle: String {
+        if showsPreview { return appState.liveTranscript }
+        // Placeholder space keeps the two-line layout stable when there's nothing to show.
+        return appState.targetAppName.map { "→ \($0)" } ?? " "
     }
 }
 

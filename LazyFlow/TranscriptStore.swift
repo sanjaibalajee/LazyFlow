@@ -60,6 +60,17 @@ final class TranscriptStore {
         }
     }
 
+    func deleteAll() {
+        do {
+            try db.write { db in
+                try db.execute(sql: "DELETE FROM transcripts")
+            }
+            entries.removeAll()
+        } catch {
+            print("[LazyFlow] TranscriptStore.deleteAll failed: \(error)")
+        }
+    }
+
     // MARK: - Private
 
     private func load() -> [TranscriptEntry] {

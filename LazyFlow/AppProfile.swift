@@ -101,9 +101,42 @@ struct FormattingOptions: Codable {
     var lowercase:           Bool = false
     var strongerPunctuation: Bool = false
     var keepFillerWords:     Bool = false
+    var omitTrailingPeriod:  Bool = false
+
+    enum CodingKeys: String, CodingKey {
+        case preserveLineBreaks, bulletize, lowercase, strongerPunctuation
+        case keepFillerWords, omitTrailingPeriod
+    }
+
+    init(
+        preserveLineBreaks: Bool = false,
+        bulletize: Bool = false,
+        lowercase: Bool = false,
+        strongerPunctuation: Bool = false,
+        keepFillerWords: Bool = false,
+        omitTrailingPeriod: Bool = false
+    ) {
+        self.preserveLineBreaks = preserveLineBreaks
+        self.bulletize = bulletize
+        self.lowercase = lowercase
+        self.strongerPunctuation = strongerPunctuation
+        self.keepFillerWords = keepFillerWords
+        self.omitTrailingPeriod = omitTrailingPeriod
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        preserveLineBreaks = try c.decodeIfPresent(Bool.self, forKey: .preserveLineBreaks) ?? false
+        bulletize = try c.decodeIfPresent(Bool.self, forKey: .bulletize) ?? false
+        lowercase = try c.decodeIfPresent(Bool.self, forKey: .lowercase) ?? false
+        strongerPunctuation = try c.decodeIfPresent(Bool.self, forKey: .strongerPunctuation) ?? false
+        keepFillerWords = try c.decodeIfPresent(Bool.self, forKey: .keepFillerWords) ?? false
+        omitTrailingPeriod = try c.decodeIfPresent(Bool.self, forKey: .omitTrailingPeriod) ?? false
+    }
 
     nonisolated var isEmpty: Bool {
-        !preserveLineBreaks && !bulletize && !lowercase && !strongerPunctuation && !keepFillerWords
+        !preserveLineBreaks && !bulletize && !lowercase && !strongerPunctuation
+            && !keepFillerWords && !omitTrailingPeriod
     }
 
     // Each active toggle contributes a concrete instruction line
@@ -114,6 +147,7 @@ struct FormattingOptions: Codable {
         if lowercase           { lines.append("- Convert ALL output to lowercase — no exceptions, including proper nouns, names, and sentence starts.") }
         if strongerPunctuation { lines.append("- Use rich punctuation to improve clarity: add commas at natural pauses, em-dashes (—) for asides and interruptions, semicolons to connect related clauses, and colons before lists. Do not over-punctuate.") }
         if keepFillerWords     { lines.append("- Preserve all filler words exactly as spoken (um, uh, like, you know, sort of, I mean, right) — do not remove or reduce them.") }
+        if omitTrailingPeriod  { lines.append("- For short conversational messages, omit the final period. Keep question marks and exclamation marks when intended.") }
         return lines.joined(separator: "\n")
     }
 }
@@ -196,6 +230,12 @@ struct AppProfile: Codable, Identifiable {
         4. You may improve grammar, fix awkward phrasing, and restructure sentences for clarity. \
         Do not add new facts, topics, or ideas that the speaker did not express.
         5. Improve how it is said, not what is said. The speaker's intent is the ground truth.
+        6. Use natural capitalization. For prose, use sentence case: capitalize sentence starts \
+        and proper nouns only. NEVER capitalize every word or use headline/title case unless an \
+        explicit style instruction below requests it.
+        7. Resolve spoken self-corrections. When the speaker revises themselves with phrases like \
+        "actually", "rather", "scratch that", or "I mean", keep the corrected intent and remove \
+        the abandoned wording. Example: "Tuesday, actually Wednesday" becomes "Wednesday".
         """
 
         if !vocabulary.isEmpty {
@@ -234,5 +274,26 @@ struct AppProfile: Codable, Identifiable {
         if id.contains("whatsapp") || id.contains("telegram") || id.contains("signal")
             || id.contains("mobilesms") || id.contains("slack") || id.contains("discord") { return .casual }
         return .formal
+    }
+
+    static func smartDefault(bundleIdentifier: String, displayName: String) -> AppProfile {
+        let tone = defaultTone(for: bundleIdentifier)
+        var profile = AppProfile(
+            bundleIdentifier: bundleIdentifier,
+            displayName: displayName,
+            tone: tone
+        )
+        if isMessagingApp(bundleIdentifier) {
+            profile.formattingOptions.omitTrailingPeriod = true
+        }
+        return profile
+    }
+
+    static func isMessagingApp(_ bundleIdentifier: String) -> Bool {
+        let id = bundleIdentifier.lowercased()
+        return [
+            "whatsapp", "telegram", "signal", "mobilesms", "slack", "discord",
+            "teams", "wechat", "lark", "beeper",
+        ].contains { id.contains($0) }
     }
 }

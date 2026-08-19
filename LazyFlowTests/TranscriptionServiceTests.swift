@@ -65,6 +65,34 @@ final class TranscriptionServiceTests: XCTestCase {
         XCTAssertFalse(body.contains("ignored term with too many words here"))
     }
 
+    // The dictation-language picker predates multi-provider STT and was easy to drop when
+    // the service moved to a config object, so both sides of it are pinned here.
+    func testLanguageIsForwardedPerProviderAndOmittedWhenAutomatic() throws {
+        let audioURL = try makeAudioFixture()
+        defer { try? FileManager.default.removeItem(at: audioURL) }
+
+        func body(provider: TranscriptionProvider, model: String, language: String?) throws -> String {
+            let service = TranscriptionService(config: TranscriptionConfig(
+                provider: provider,
+                apiKey: "key-test",
+                model: model,
+                language: language
+            ))
+            let request = try service.makeRequest(audioURL: audioURL)
+            return String(decoding: try XCTUnwrap(request.httpBody), as: UTF8.self)
+        }
+
+        let whisper = try body(provider: .groq, model: "whisper-large-v3", language: "es")
+        XCTAssertTrue(whisper.contains("name=\"language\"\r\n\r\nes"))
+
+        let scribe = try body(provider: .elevenLabs, model: "scribe_v2", language: "es")
+        XCTAssertTrue(scribe.contains("name=\"language_code\"\r\n\r\nes"))
+
+        // Automatic detection must send no language field at all.
+        let automatic = try body(provider: .groq, model: "whisper-large-v3", language: nil)
+        XCTAssertFalse(automatic.contains("name=\"language\""))
+    }
+
     private func makeAudioFixture() throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("lazyflow-transcription-\(UUID().uuidString).wav")

@@ -98,4 +98,13 @@ struct TranscriptionConfig {
     let provider: TranscriptionProvider
     let apiKey: String
     let model: String
+    /// ISO-639-1 code, or nil for automatic detection.
+    let language: String?
+
+    init(provider: TranscriptionProvider, apiKey: String, model: String, language: String? = nil) {
+        self.provider = provider
+        self.apiKey = apiKey
+        self.model = model
+        self.language = language
+    }
 }

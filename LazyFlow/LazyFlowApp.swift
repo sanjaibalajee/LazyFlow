@@ -3,7 +3,7 @@ import SwiftUI
 @main
 struct LazyFlowApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    private let updaterService = UpdaterService()
+    private let updaterService = UpdaterService.shared
 
     var body: some Scene {
         Window("LazyFlow", id: "main") {

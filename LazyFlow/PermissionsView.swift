@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PermissionsSetupView: View {
     @Environment(AppState.self) private var appState
+    private var permissions: PermissionsService { appState.permissions }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 28) {
@@ -24,13 +25,13 @@ struct PermissionsSetupView: View {
 
             HStack(spacing: 12) {
                 Button("setup permissions") {
-                    appState.setupPermissions()
+                    NotificationCenter.default.post(name: .lazyflowOpenSetup, object: nil)
                 }
                 .lazyFlowGlassButton(prominent: true)
                 .controlSize(.large)
 
                 Button("open privacy settings") {
-                    appState.openPermissionSettings()
+                    permissions.openSettings(permissions.microphone ? .accessibility : .microphone)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
@@ -44,12 +45,13 @@ struct PermissionsSetupView: View {
         }
         .padding(.horizontal, 52)
         .frame(maxWidth: 680, maxHeight: .infinity, alignment: .leading)
-        .task { appState.refreshPermissions() }
+        .task { permissions.refresh() }
     }
 }
 
 struct PermissionsSettingsSection: View {
     @Environment(AppState.self) private var appState
+    private var permissions: PermissionsService { appState.permissions }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -59,7 +61,7 @@ struct PermissionsSettingsSection: View {
 
                 Spacer()
 
-                if appState.hasRequiredPermissions {
+                if permissions.coreReady {
                     Label("Ready", systemImage: "checkmark.circle.fill")
                         .font(.caption)
                         .foregroundStyle(.green)
@@ -68,22 +70,23 @@ struct PermissionsSettingsSection: View {
 
             PermissionStatusList(compact: true)
 
-            if !appState.hasRequiredPermissions {
+            if !permissions.coreReady {
                 Button("Setup Permissions") {
-                    appState.setupPermissions()
+                    NotificationCenter.default.post(name: .lazyflowOpenSetup, object: nil)
                 }
                 .lazyFlowGlassButton(prominent: true)
                 .controlSize(.small)
             }
         }
         .padding(20)
-        .task { appState.refreshPermissions() }
+        .task { permissions.refresh() }
     }
 }
 
 private struct PermissionStatusList: View {
     @Environment(AppState.self) private var appState
     var compact = false
+    private var permissions: PermissionsService { appState.permissions }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -91,7 +94,7 @@ private struct PermissionStatusList: View {
                 icon: "mic",
                 title: "microphone",
                 detail: "capture speech for transcription",
-                isGranted: appState.hasMicrophonePermission,
+                isGranted: permissions.microphone,
                 compact: compact
             )
 
@@ -101,7 +104,7 @@ private struct PermissionStatusList: View {
                 icon: "keyboard",
                 title: "accessibility",
                 detail: "detect right option and insert text",
-                isGranted: appState.hasAccessibilityPermission,
+                isGranted: permissions.accessibility,
                 compact: compact
             )
         }
